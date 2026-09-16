@@ -1,0 +1,584 @@
+<!--
+   Ported from HexManiac.WPF/Windows/MainWindow.xaml.
+
+   The biggest structural change: WPF's in-window <Menu> becomes an Avalonia <NativeMenu>, which
+   is the macOS menu bar (PORTING.md's "Menu in window -> NativeMenu"). Every Ctrl accelerator
+   therefore reads as Cmd. InputGestureText strings become real Gesture values.
+   Other recurring changes: Visibility+BoolToVisibility -> IsVisible; DataTrigger -> bound style
+   classes or converters; ToolTip elements -> ToolTip.Tip.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.MainWindow"
+        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+        xmlns:hsv="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+        xmlns:hsg3hv="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+        xmlns:hshmcvm="clr-namespace:HavenSoft.HexManiac.Core.ViewModels;assembly=HexManiac.Core"
+        Title="HexManiacAdvance" Width="1200" Height="800"
+        Background="{DynamicResource Background}">
+
+  <Window.Styles>
+    <!-- Goto prefix tokens: WPF used IsMouseOver / IsSelected triggers and a MultiDataTrigger. -->
+    <Style Selector="Border.gotoTokenOuter">
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector="Border.gotoTokenOuter:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary}"/>
+    </Style>
+    <Style Selector="Border.gotoTokenOuter.selected:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+    <Style Selector="Border.gotoTokenInner">
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary}"/>
+    </Style>
+    <Style Selector="Border.gotoTokenInner.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+    </Style>
+    <Style Selector="Button.metadataOnly > Path">
+      <Setter Property="Fill" Value="{DynamicResource Primary}"/>
+    </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Width" Value="50"/>
+      <Setter Property="Height" Value="50"/>
+      <Setter Property="Padding" Value="2"/>
+      <Setter Property="Margin" Value="5"/>
+    </Style>
+    <Style Selector="Border.gotoTokenInner.unselectable">
+      <Setter Property="ToolTip.Tip" Value="Too many options. Use the textbox above to filter results."/>
+      <Setter Property="ToolTip.ShowDelay" Value="0"/>
+    </Style>
+  </Window.Styles>
+
+  <NativeMenu.Menu>
+    <NativeMenu>
+      <NativeMenuItem Header="File">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="New" Gesture="Cmd+N" Command="{Binding New}" />
+            <NativeMenuItem Header="Open" Gesture="Cmd+O" Command="{Binding Open}" />
+            <NativeMenuItem Header="Open Recent" IsEnabled="{Binding RecentFileMenuEnabled}"
+                            Menu="{Binding RecentFileViewModels, Converter={x:Static hsv:RecentFilesMenuConverter.Instance}}" />
+            <NativeMenuItem Header="Duplicate Current Tab" Gesture="Cmd+T" Command="{Binding DuplicateCurrentTab}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Save" Gesture="Cmd+S" Command="{Binding Save}" />
+            <NativeMenuItem Header="Save As" Gesture="Cmd+Shift+S" Command="{Binding SaveAs}" />
+            <NativeMenuItem Header="Save All" Gesture="Cmd+Shift+A" Command="{Binding SaveAll}" />
+            <NativeMenuItem Header="Export Backup" Gesture="Cmd+E" Command="{Binding ExportBackup}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Calculate Common Hashes" Click="CalculateHashesClick" />
+            <NativeMenuItemSeparator />
+            <!-- Not in HexManiac.WPF: dumps the tables as text so a hack can live in git. -->
+            <NativeMenuItem Header="Export Project as Text..." Click="ExportProjectClick" />
+            <NativeMenuItem Header="Import Project from Text..." Click="ImportProjectClick" />
+            <NativeMenuItem Header="Run" Gesture="F5" Command="{Binding RunFile}" CommandParameter="{DynamicResource FileSystem}" />
+            <NativeMenuItem Header="Test in Emulator" Gesture="F6" Click="OpenEmulatorClick" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Close Current Tab" Gesture="Cmd+W" Command="{Binding Close}" CommandParameter="{DynamicResource FileSystem}" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Edit">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Undo" Gesture="Cmd+Z" Command="{Binding Undo}" />
+            <NativeMenuItem Header="Redo" Gesture="Cmd+Y" Command="{Binding Redo}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Display As...">
+              <NativeMenuItem.Menu>
+                <NativeMenu>
+                  <NativeMenuItem Header="Text" Command="{Binding DisplayAsText}" />
+                  <NativeMenuItem Header="Event Script" Command="{Binding DisplayAsEventScript}" />
+                  <NativeMenuItem Header="Sprite" Command="{Binding DisplayAsSprite}" />
+                  <NativeMenuItem Header="Color Palette" Command="{Binding DisplayAsColorPalette}" />
+                </NativeMenu>
+              </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Cut" Gesture="Cmd+X" Command="{Binding Cut}" />
+            <NativeMenuItem Header="Copy" Gesture="Cmd+C" Command="{Binding Copy}" />
+            <NativeMenuItem Header="Deep Copy" Gesture="Cmd+Shift+C" Command="{Binding DeepCopy}" />
+            <NativeMenuItem Header="Paste / Replace" Gesture="Cmd+V" Command="{Binding Paste}" />
+            <NativeMenuItem Header="Delete" Command="{Binding Delete}" />
+            <NativeMenuItem Header="Select All" Gesture="Cmd+A" Command="{Binding SelectAll}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Find" Gesture="Cmd+F" Command="{Binding ShowFind}" CommandParameter="{x:True}" />
+            <NativeMenuItem Header="Find Next" Gesture="F3" Command="{Binding FindNext}" />
+            <NativeMenuItem Header="Find Previous" Gesture="Shift+F3" Command="{Binding FindPrevious}" />
+            <NativeMenuItem Header="Goto" Gesture="Cmd+G" Command="{Binding GotoViewModel.ShowGoto}" CommandParameter="{x:True}" />
+            <NativeMenuItem Header="Go Back" Gesture="Cmd+OemMinus" Command="{Binding Back}" />
+            <NativeMenuItem Header="Go Forward" Gesture="Cmd+Shift+OemMinus" Command="{Binding Forward}" />
+            <NativeMenuItem Header="Show Hex Converter" Gesture="Cmd+H" Command="{Binding ShowHexConverter}" CommandParameter="{x:True}" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="View">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Diff">
+              <NativeMenuItem.Menu>
+                <NativeMenu>
+                  <NativeMenuItem Header="Diff Since Last Save" Gesture="Cmd+Shift+D" Command="{Binding DiffSinceLastSave}" />
+                  <NativeMenuItem Header="Diff selected tab with left neighbor" Command="{Binding DiffLeft}" />
+                  <NativeMenuItem Header="Diff selected tab with right neighbor" Command="{Binding DiffRight}" />
+                  <NativeMenuItemSeparator />
+                  <NativeMenuItem Header="Exclude Pointer-only changes from diffs" ToggleType="CheckBox" IsChecked="{Binding HideDiffPointerChanges, Mode=TwoWay}" />
+                </NativeMenu>
+              </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Show Matrix Grid" Gesture="Cmd+M" ToggleType="CheckBox" IsChecked="{Binding ShowMatrix, Mode=TwoWay}" />
+            <NativeMenuItem Header="Animate when Scrolling" ToggleType="CheckBox" IsChecked="{Binding AnimateScroll, Mode=TwoWay}" />
+            <NativeMenuItem Header="Use Table Entry Headers" ToggleType="CheckBox" IsChecked="{Binding UseTableEntryHeaders, Mode=TwoWay}" />
+            <NativeMenuItem Header="Enable Single Table Focus" ToggleType="CheckBox" IsChecked="{Binding AllowSingleTableMode, Mode=TwoWay}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Reset Zoom" Command="{Binding ResetZoom}" />
+            <NativeMenuItem Header="Reset Alignment" Command="{Binding ResetAlignment}" />
+            <NativeMenuItem Header="Customize Theme" Click="ShowThemeSelector" />
+            <NativeMenuItem Header="Clear Error" Command="{Binding ClearError}" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+      <!--
+        Developer menu. WPF hid it with a Visibility trigger on ShowDeveloperMenu (set by the
+        dev-menu launch argument); a NativeMenuItem has no IsVisible, so it binds IsEnabled and the
+        whole menu simply stays greyed out unless the app was launched with the flag.
+      -->
+      <NativeMenuItem Header="Developer" IsEnabled="{Binding ShowDeveloperMenu}">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Copy Aligned Address" Command="{Binding CopyAlignedAddress}" CommandParameter="{DynamicResource FileSystem}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Assert" Click="DeveloperRaiseAssert" />
+            <NativeMenuItem Header="Throw ArgumentOutOfRangeException" Click="DeveloperThrowArgumentOutOfRangeException" />
+            <NativeMenuItem Header="Throw AggregateException" Click="DeveloperThrowAggregateException" />
+            <NativeMenuItem Header="Write Debug" Click="DeveloperWriteDebug" />
+            <NativeMenuItem Header="Write Trace" Click="DeveloperWriteTrace" />
+            <NativeMenuItem Header="Update Documentation Files" Click="DeveloperUpdateDocs" />
+            <NativeMenuItem Header="Run Garbage Collection" Click="DeveloperRunGarbageCollection" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Force Metadata Reload" Click="DeveloperReloadMetadata" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Utilities">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <!-- The submenu must exist in markup: assigning NativeMenuItem.Menu from code after the
+                 menu has been exported to macOS does not reach the NSMenu, and the item renders as a
+                 plain disabled entry. MainWindow.FillQuickEditMenus adds into this collection. -->
+            <NativeMenuItem Header="Pokedex">
+              <NativeMenuItem.Menu><NativeMenu /></NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <!-- The submenu must exist in markup: assigning NativeMenuItem.Menu from code after the
+                 menu has been exported to macOS does not reach the NSMenu, and the item renders as a
+                 plain disabled entry. MainWindow.FillQuickEditMenus adds into this collection. -->
+            <NativeMenuItem Header="Expand">
+              <NativeMenuItem.Menu><NativeMenu /></NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <!-- The submenu must exist in markup: assigning NativeMenuItem.Menu from code after the
+                 menu has been exported to macOS does not reach the NSMenu, and the item renders as a
+                 plain disabled entry. MainWindow.FillQuickEditMenus adds into this collection. -->
+            <NativeMenuItem Header="Misc">
+              <NativeMenuItem.Menu><NativeMenu /></NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Scripts" Command="{Binding LaunchScriptsLocation}" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Tools">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Hide All Tools" Command="{Binding Tools.HideCommand}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Toggle Table Tool" Command="{Binding Tools.TableToolCommand}" />
+            <NativeMenuItem Header="Toggle Text Tool" Command="{Binding Tools.StringToolCommand}" />
+            <NativeMenuItem Header="Toggle Image Tool" Command="{Binding Tools.SpriteToolCommand}" />
+            <NativeMenuItem Header="Toggle Code Tool" Command="{Binding Tools.CodeToolCommand}" />
+            <NativeMenuItem Header="Show Hex Converter" Gesture="Cmd+H" Command="{Binding ShowHexConverter}" CommandParameter="{x:True}" />
+            <NativeMenuItem Header="Toggle Automation Tool" Gesture="Cmd+R" ToggleType="CheckBox" IsChecked="{Binding ShowAutomationPanel, Mode=TwoWay}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Spartan Mode" ToggleType="CheckBox" IsChecked="{Binding SpartanMode, Mode=TwoWay}" />
+            <NativeMenuItemSeparator />
+            <!-- Not in HexManiac.WPF: lets an MCP client (Claude) work on the open ROM. -->
+            <NativeMenuItem Header="Claude Assistant (MCP Server)" ToggleType="CheckBox" Click="ToggleMcpServerClick" />
+            <NativeMenuItem Header="Show MCP Setup Command" Click="ShowMcpSetupClick" />
+            <NativeMenuItem Header="Toggle Claude Chat" Gesture="Cmd+Shift+C" ToggleType="CheckBox" Click="ToggleChatPanelClick" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Help">
+        <NativeMenuItem.Menu>
+          <NativeMenu>
+            <!--
+               WPF also tinted this item with the accent colour until the user had moused over it
+               (NewVersionAcknowledged). A NativeMenuItem is drawn by macOS and has no Background,
+               so the port keeps the enable/disable half, which is the part that carries meaning.
+            -->
+            <NativeMenuItem Header="Update" Click="UpdateClick" IsEnabled="{Binding IsNewVersionAvailable}" />
+            <NativeMenuItem Header="Wiki" Click="WebLink" CommandParameter="https://github.com/haven1433/HexManiacAdvance/wiki" />
+            <NativeMenuItem Header="Tutorials" Click="WebLink" CommandParameter="https://github.com/haven1433/HexManiacAdvance/wiki/Tutorials" />
+            <NativeMenuItem Header="Event Script Reference" Click="WebLink" CommandParameter="https://github.com/haven1433/HexManiacAdvance/wiki/Everything-You-Need-for-Event-Scripting-in-HexManiacAdvance" />
+            <NativeMenuItem Header="Online Reference Content">
+              <NativeMenuItem.Menu>
+                <NativeMenu>
+                  <NativeMenuItem Header="Ruby">
+                    <NativeMenuItem.Menu>
+                      <NativeMenu>
+                        <NativeMenuItem Header="List of Script Variables" Click="WebLink" CommandParameter="https://github.com/pret/pokeruby/blob/master/include/constants/vars.h" />
+                        <NativeMenuItem Header="List of Script Flags" Click="WebLink" CommandParameter="https://github.com/pret/pokeruby/blob/master/include/constants/flags.h" />
+                        <NativeMenuItem Header="List of All Symbols" Click="WebLink" CommandParameter="https://raw.githubusercontent.com/pret/pokeruby/symbols/pokeruby.sym" />
+                        <NativeMenuItem Header="Battle Outcome Constants" Click="WebLink" CommandParameter="https://github.com/pret/pokeruby/blob/master/include/constants/battle.h#L67" />
+                      </NativeMenu>
+                    </NativeMenuItem.Menu>
+                  </NativeMenuItem>
+                  <NativeMenuItem Header="FireRed">
+                    <NativeMenuItem.Menu>
+                      <NativeMenu>
+                        <NativeMenuItem Header="List of Script Variables" Click="WebLink" CommandParameter="https://github.com/pret/pokefirered/blob/master/include/constants/vars.h" />
+                        <NativeMenuItem Header="List of Script Flags" Click="WebLink" CommandParameter="https://github.com/pret/pokefirered/blob/master/include/constants/flags.h" />
+                        <NativeMenuItem Header="List of All Symbols" Click="WebLink" CommandParameter="https://raw.githubusercontent.com/pret/pokefirered/symbols/pokefirered.sym" />
+                        <NativeMenuItem Header="Battle Outcome Constants" Click="WebLink" CommandParameter="https://github.com/pret/pokefirered/blob/master/include/constants/battle.h#L75" />
+                      </NativeMenu>
+                    </NativeMenuItem.Menu>
+                  </NativeMenuItem>
+                  <NativeMenuItem Header="Emerald">
+                    <NativeMenuItem.Menu>
+                      <NativeMenu>
+                        <NativeMenuItem Header="List of Script Variables" Click="WebLink" CommandParameter="https://github.com/pret/pokeemerald/blob/master/include/constants/vars.h" />
+                        <NativeMenuItem Header="List of Script Flags" Click="WebLink" CommandParameter="https://github.com/pret/pokeemerald/blob/master/include/constants/flags.h" />
+                        <NativeMenuItem Header="List of All Symbols" Click="WebLink" CommandParameter="https://raw.githubusercontent.com/pret/pokeemerald/symbols/pokeemerald.sym" />
+                        <NativeMenuItem Header="Battle Outcome Constants" Click="WebLink" CommandParameter="https://github.com/pret/pokeemerald/blob/c32fbf594aec382e3bd58a6651e1e382c5105e4b/include/constants/battle.h#L88" />
+                      </NativeMenu>
+                    </NativeMenuItem.Menu>
+                  </NativeMenuItem>
+                </NativeMenu>
+              </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Report an Issue" Click="WebLink" CommandParameter="https://github.com/haven1433/HexManiacAdvance/issues" />
+            <NativeMenuItem Header="Discord" Click="WebLink" CommandParameter="https://discord.gg/x9eQuBg" />
+            <NativeMenuItem Header="Copy Anchor Reference" Command="{Binding CopyAnchorReference}" CommandParameter="{DynamicResource FileSystem}" />
+            <NativeMenuItem Header="About" Click="AboutClick" />
+          </NativeMenu>
+        </NativeMenuItem.Menu>
+      </NativeMenuItem>
+    </NativeMenu>
+  </NativeMenu.Menu>
+
+  <Grid Name="ContentPanel">
+    <DockPanel>
+      <!-- Toolbar / search panels row -->
+      <DockPanel DockPanel.Dock="Top" Background="{DynamicResource Background}">
+
+        <!-- Find -->
+        <StackPanel Name="FindPanel" Orientation="Horizontal" DockPanel.Dock="Right" IsVisible="{Binding FindControlVisible}">
+          <TextBlock Text="Find :" Margin="10,0" VerticalAlignment="Center" />
+          <ToggleButton Width="18" IsChecked="{Binding SearchAllFiles, Mode=TwoWay}"
+                        ToolTip.Tip="Search All Files - on: look for matches in all open tabs">
+            <Path Data="{hsv:Icon Multiple}" Stretch="Uniform"
+                  Stroke="{Binding SearchAllFiles, Converter={StaticResource FindToggleBrush}}"/>
+          </ToggleButton>
+          <ToggleButton Width="18" IsChecked="{Binding MatchExactCase, Mode=TwoWay}"
+                        ToolTip.Tip="Match Exact Case - off: 'abc' can find 'ABC'">
+            <TextBlock Text="Aa" Foreground="{Binding MatchExactCase, Converter={StaticResource FindToggleBrush}}"/>
+          </ToggleButton>
+          <TextBox Name="FindBox" MinWidth="200" Text="{Binding FindText, Mode=TwoWay}" />
+        </StackPanel>
+
+        <!-- Hex Converter -->
+        <StackPanel Name="HexConverter" Orientation="Horizontal" DockPanel.Dock="Right" IsVisible="{Binding HexConverterVisible}">
+          <TextBlock Text="Hex :" Margin="10,0" VerticalAlignment="Center" />
+          <TextBox Name="HexBox" MinWidth="100" Text="{Binding HexText, Mode=TwoWay}" />
+          <TextBlock Text="Decimal :" Margin="10,0" VerticalAlignment="Center" />
+          <TextBox Name="DecBox" MinWidth="100" Text="{Binding DecText, Mode=TwoWay}" />
+        </StackPanel>
+
+        <!-- Message -->
+        <StackPanel Name="MessagePanel" IsVisible="{Binding ShowMessage}" Orientation="Horizontal"
+                    PointerPressed="DismissBarOnMiddleClick"
+                    DockPanel.Dock="Right" HorizontalAlignment="Right" Background="{DynamicResource Backlight}">
+          <StackPanel.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="Copy Message" Command="{hsv:MethodCommand CopyMessage}" />
+            </ContextMenu>
+          </StackPanel.ContextMenu>
+          <TextBlock Margin="10,0" VerticalAlignment="Center" Text="{Binding InformationMessage}" Foreground="{DynamicResource Accent}"/>
+          <Button Command="{Binding ClearMessage}" Width="15">
+            <Path Data="{hsv:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Uniform"/>
+          </Button>
+        </StackPanel>
+
+        <!-- Error -->
+        <Grid Name="ErrorPanel" IsVisible="{Binding ShowError}" ColumnDefinitions="*,Auto"
+              PointerPressed="DismissBarOnMiddleClick"
+              DockPanel.Dock="Right" HorizontalAlignment="Right" Background="{DynamicResource Backlight}">
+          <Grid.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="Copy Error" Command="{hsv:MethodCommand CopyError}" />
+            </ContextMenu>
+          </Grid.ContextMenu>
+          <TextBlock Margin="10,0" VerticalAlignment="Center" Text="{Binding ErrorMessage}" TextWrapping="Wrap" TextAlignment="Right" Foreground="{DynamicResource Error}"/>
+          <Button Command="{Binding ClearError}" Width="15" Grid.Column="1">
+            <Path Data="{hsv:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Uniform"/>
+          </Button>
+          <Border BorderThickness="1" IsHitTestVisible="False" Grid.ColumnSpan="2" BorderBrush="{DynamicResource Error}" />
+        </Grid>
+
+        <Panel/>
+      </DockPanel>
+
+      <!-- Toolbar -->
+      <StackPanel DockPanel.Dock="Top" Background="{DynamicResource Background}" HorizontalAlignment="Stretch" Orientation="Horizontal">
+        <StackPanel.Styles>
+          <Style Selector="StackPanel > Button">
+            <Setter Property="Background" Value="{DynamicResource Background}"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="1"/>
+          </Style>
+          <Style Selector="StackPanel > Button > Path">
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="Fill" Value="{DynamicResource Primary}"/>
+          </Style>
+          <Style Selector="StackPanel > Button:disabled > Path">
+            <Setter Property="Fill" Value="{DynamicResource Secondary}"/>
+          </Style>
+        </StackPanel.Styles>
+        <Button ToolTip.Tip="Navigate Back (Cmd + (-))" Command="{Binding Back}">
+          <Path Data="{hsv:Icon LeftArrow}"/>
+        </Button>
+        <Button ToolTip.Tip="Navigate Forward (Cmd+Shift + (-))" Command="{Binding Forward}">
+          <Path Data="{hsv:Icon RightArrow}"/>
+        </Button>
+        <Rectangle Width="5"/>
+        <!--
+          The accent tint means "there is real data to save". When the only difference is metadata,
+          WPF dropped the icon back to Primary and said so in the tooltip; the class does that here.
+        -->
+        <Button Command="{Binding Save}" Classes.metadataOnly="{Binding IsMetadataOnlyChange}">
+          <!-- A Run has no IsVisible, so the metadata note is its own TextBlock. -->
+          <ToolTip.Tip>
+            <StackPanel>
+              <TextBlock Text="Save (Cmd+S)"/>
+              <TextBlock Text="(Only metadata changes)" FontSize="10" FontStyle="Italic"
+                         IsVisible="{Binding IsMetadataOnlyChange}"/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <Path Data="{hsv:Icon Save}" Fill="{DynamicResource Accent}"/>
+        </Button>
+        <Rectangle Width="5"/>
+        <Button ToolTip.Tip="Undo (Cmd+Z)" Command="{Binding Undo}">
+          <Path Data="{hsv:Icon UndoArrow}"/>
+        </Button>
+        <Button ToolTip.Tip="Redo (Cmd+Y)" Command="{Binding Redo}">
+          <Path Data="{hsv:Icon RedoArrow}"/>
+        </Button>
+        <Rectangle Width="5"/>
+        <Button ToolTip.Tip="Show Goto Menu (Cmd+G)" Command="{Binding GotoViewModel.ShowGoto}">
+          <Path Data="{hsv:Icon Home}"/>
+        </Button>
+        <Button ToolTip.Tip="Find (Cmd+F)" Command="{Binding ShowFind}">
+          <Path Data="{hsv:Icon Search}"/>
+        </Button>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,0,0" Height="18"
+                    IsVisible="{Binding ShowWidthOptions}">
+          <TextBlock Foreground="{DynamicResource Secondary}" Text="Row Width:" VerticalAlignment="Center"/>
+          <TextBox Text="{Binding SelectedTab.PreferredWidth, Mode=TwoWay}" Width="34"
+                   HorizontalContentAlignment="Right" Margin="5,0"/>
+          <ToggleButton IsChecked="{Binding SelectedTab.StretchData, Mode=TwoWay}" ToolTip.Tip="Stretch Cells to fill available space.">
+            <Path Data="{hsv:Icon ArrowsLeftRight}" Stretch="Uniform" Width="12" Height="12" Fill="{DynamicResource Primary}"/>
+          </ToggleButton>
+          <ToggleButton IsChecked="{Binding SelectedTab.AutoAdjustDataWidth, Mode=TwoWay}" VerticalContentAlignment="Center" ToolTip.Tip="Adjust Width after Goto">
+            <TextBlock Text="Auto" VerticalAlignment="Bottom"/>
+          </ToggleButton>
+          <ToggleButton IsChecked="{Binding SelectedTab.AllowMultipleElementsPerLine, Mode=TwoWay}" ToolTip.Tip="Allow Multiple Rows per Line.">
+            <Path Data="{hsv:Icon MultiList}" Stretch="Uniform" Width="12" Height="12" Fill="{DynamicResource Primary}"/>
+          </ToggleButton>
+        </StackPanel>
+        <Rectangle Width="5"/>
+        <Button ToolTip.Tip="Launch Saved File (F5)" Command="{Binding RunFile}" CommandParameter="{DynamicResource FileSystem}">
+          <!-- WPF drew this triangle inline rather than from Icons.xaml, and there is no
+               "Play" icon to reference: {hsv:Icon Play} resolved to nothing and left the
+               button blank. -->
+          <Path Data="M0,0 L5,5 0,10 Z" Fill="{DynamicResource Stream2}"/>
+        </Button>
+        <Button ToolTip.Tip="Ask Claude about this ROM (Cmd+Shift+C)" Click="ToggleChatPanelClick">
+          <Path Data="M0,1 A1,1 0 0 1 1,0 L11,0 A1,1 0 0 1 12,1 L12,7 A1,1 0 0 1 11,8 L4,8 L1.5,10.5 L1.5,8 L1,8 A1,1 0 0 1 0,7 Z M3,3 L9,3 M3,5 L7,5"
+                Stroke="{DynamicResource Accent}" StrokeThickness="1" Fill="Transparent"/>
+        </Button>
+        <Button ToolTip.Tip="Test in Emulator (F6) - runs the ROM as it is right now, unsaved edits included"
+                Click="OpenEmulatorClick">
+          <Path Data="M0,1 L10,1 A1,1 0 0 1 11,2 L11,8 A1,1 0 0 1 10,9 L0,9 A1,1 0 0 1 -1,8 L-1,2 A1,1 0 0 1 0,1 Z M1.5,3.5 L1.5,6.5 M0,5 L3,5 M8,4 A0.9,0.9 0 1 1 8,4.01 M9.6,6 A0.9,0.9 0 1 1 9.6,6.01"
+                Stroke="{DynamicResource Stream2}" StrokeThickness="1" Fill="Transparent"/>
+        </Button>
+      </StackPanel>
+
+      <!-- Tabs + Goto overlay -->
+      <!--
+        Tabs plus the Python automation panel. WPF collapsed the two right-hand columns to zero
+        width and reopened them when ShowAutomationPanel turned on; the same sizing lives in
+        MainWindow.axaml.cs, because Avalonia has no Trigger to drive a ColumnDefinition.
+      -->
+      <Grid Name="TabContainer" ColumnDefinitions="*,0,0,0,0">
+        <!-- Selection is synced in code-behind, not bound: see MainWindow.axaml.cs -->
+        <TabControl Name="Tabs" Grid.Column="0">
+          <TabControl.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="*,Auto" ToolTip.Tip="{Binding FullFileName}">
+                <Grid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Show in Finder" Command="{hsv:MethodCommand LaunchFileLocation}" CommandParameter="{DynamicResource FileSystem}" />
+                    <MenuItem Header="Duplicate Tab" Command="{hsv:MethodCommand Duplicate}"/>
+                    <MenuItem Header="Diff with Left" Command="{Binding DiffLeft}" />
+                    <MenuItem Header="Diff with Right" Command="{Binding DiffRight}" />
+                    <Separator/>
+                    <MenuItem Header="Make IPS Patch, this -&gt; Right" Command="{hsv:MethodCommand IpsPatchRight}"/>
+                    <MenuItem Header="Make UPS Patch, this -&gt; Right" Command="{hsv:MethodCommand UpsPatchRight}"/>
+                  </ContextMenu>
+                </Grid.ContextMenu>
+                <TextBlock Name="TabTextBlock" Background="Transparent" Text="{Binding Name}" Foreground="{DynamicResource Primary}"
+                           PointerPressed="TabMouseDown" PointerMoved="TabMouseMove" PointerReleased="TabMouseUp"/>
+                <Button Command="{Binding Close}" CommandParameter="{DynamicResource FileSystem}" Width="15" Margin="5,0,0,0"
+                        Background="{DynamicResource Background}" BorderBrush="{DynamicResource Background}" Grid.Column="1">
+                  <Path Data="{hsv:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Uniform"/>
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </TabControl.ItemTemplate>
+        </TabControl>
+        <GridSplitter Name="PythonToolSplitter" Grid.Column="1" HorizontalAlignment="Stretch"
+                      Background="{DynamicResource Backlight}" Width="4"/>
+        <DockPanel Grid.Column="2">
+          <hsg3hv:PythonPanel x:Name="PythonTool" DataContext="{Binding PythonTool}"/>
+        </DockPanel>
+
+        <!-- Chat panel, docked the same way the automation panel is. -->
+        <GridSplitter Name="ChatSplitter" Grid.Column="3" HorizontalAlignment="Stretch"
+                      Background="{DynamicResource Backlight}" Width="4"/>
+        <DockPanel Grid.Column="4">
+          <hsg3hv:ChatPanel x:Name="ChatTool"/>
+        </DockPanel>
+
+        <!-- WPF faded a translucent sheet over the tabs while the goto panel was open. -->
+        <Rectangle Name="GotoBackground" Fill="{DynamicResource Background}" Opacity="0"
+                   IsHitTestVisible="False" IsVisible="{Binding GotoViewModel.ControlVisible}"/>
+
+        <!-- Goto Panel -->
+        <ScrollViewer Name="GotoPanel" VerticalScrollBarVisibility="Auto" Background="{DynamicResource Background}"
+                      IsVisible="{Binding GotoViewModel.ControlVisible}">
+          <Grid RowDefinitions="*,Auto,*,Auto,*">
+            <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Grid HorizontalAlignment="Stretch" Width="400">
+                <Path Data="{hsv:Icon Home}" Opacity=".5" Fill="{DynamicResource Secondary}" Stretch="Uniform" Width="20" Height="20" HorizontalAlignment="Left"/>
+                <TextBlock FontSize="20" Text="Goto:" HorizontalAlignment="Center"/>
+                <Button Background="{DynamicResource Background}" BorderBrush="{DynamicResource Secondary}"
+                        Command="{Binding GotoViewModel.ShowGoto}" CommandParameter="{x:False}" Padding="4"
+                        ToolTip.Tip="Close (esc)" Width="20" Height="20" VerticalAlignment="Top" HorizontalAlignment="Right">
+                  <Path Data="{hsv:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Uniform"/>
+                </Button>
+              </Grid>
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Grid>
+                  <hsg3hv:AngleTextBox x:Name="GotoBox" FontSize="30" MinHeight="44" MinWidth="400" Direction="Out"
+                                       TextBinding="{Binding GotoViewModel.Text, Mode=TwoWay}">
+                     <hsg3hv:AngleTextBox.KeyBindings>
+                        <KeyBinding Gesture="Escape" Command="{Binding GotoViewModel.ShowGoto}" CommandParameter="{x:False}"/>
+                        <KeyBinding Gesture="Enter" Command="{Binding GotoViewModel.Goto}"/>
+                     </hsg3hv:AngleTextBox.KeyBindings>
+                  </hsg3hv:AngleTextBox>
+                  <TextBlock IsHitTestVisible="False" Foreground="{DynamicResource Secondary}" FontStyle="Italic" FontSize="25"
+                             VerticalAlignment="Bottom" Margin="10,3,10,3" Text="Search or type an Address"
+                             IsVisible="{Binding GotoViewModel.Text, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
+                </Grid>
+                <hsg3hv:AngleButton VerticalAlignment="Stretch" Padding="2,0" Direction="Right"
+                   Command="{Binding GotoViewModel.Goto}" Background="{DynamicResource Accent}" HorizontalContentAlignment="Center">
+                  <TextBlock Text="Best Match" MinWidth="60" />
+                </hsg3hv:AngleButton>
+              </StackPanel>
+              <TextBlock Text="Loading..." FontSize="20" Foreground="{DynamicResource Secondary}" HorizontalAlignment="Center"
+                         IsVisible="{Binding GotoViewModel.Loading}"/>
+              <ItemsControl ItemsSource="{Binding GotoViewModel.Shortcuts}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <!--
+                      WPF shrank these with a DataTrigger on SmallMode; Avalonia carries it as a
+                      style class instead (the .small setters are in Window.Styles).
+                    -->
+                    <Button FontWeight="Bold" Name="ShortcutButton" Command="{hsv:MethodCommand Goto}"
+                            BorderBrush="{DynamicResource Primary}" IsVisible="{Binding Visible}"
+                            Classes.small="{Binding SmallMode}"
+                            Width="100" Height="100" Padding="10" Margin="10">
+                      <DockPanel>
+                        <Viewbox DockPanel.Dock="Bottom" StretchDirection="DownOnly" HorizontalAlignment="Center">
+                          <TextBlock Text="{Binding DisplayText}"/>
+                        </Viewbox>
+                        <Viewbox Stretch="Uniform" MinWidth="32" MinHeight="32">
+                          <hsg3hv:PixelImage DataContext="{Binding Image}" UseTrueTransparency="True"/>
+                        </Viewbox>
+                      </DockPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <!--
+                Prefix token grid. WPF drove the two borders with IsMouseOver / IsSelected
+                triggers and a MultiDataTrigger; Avalonia gets the same three states from
+                :pointerover plus a bound "selected" class.
+              -->
+              <ItemsControl MinHeight="100" ItemsSource="{Binding GotoViewModel.PrefixSelections}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel>
+                      <Rectangle HorizontalAlignment="Stretch" Height="1" Margin="0,3" Fill="{DynamicResource Secondary}" Width="{Binding #GotoBox.Bounds.Width}"/>
+                      <ItemsControl ItemsSource="{Binding Tokens}" HorizontalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <UniformGrid Rows="{Binding Height}" Columns="{Binding Width}"/>
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Border Classes="gotoTokenOuter" Margin="5" BorderThickness="1"
+                                    Classes.selected="{Binding IsSelected}">
+                              <Border Classes="gotoTokenInner" BorderThickness="1" Classes.selected="{Binding IsSelected}"
+                                      Classes.unselectable="{Binding !IsSelectable}">
+                                <Grid>
+                                  <!--
+                                    ToolTip.Tip has to resolve to null when the token has no hover
+                                    tip. A tooltip that is merely empty still opens a popup, and
+                                    that popup steals the pointer from the button underneath it -
+                                    see GotoHoverTipConverter.
+                                  -->
+                                  <ToggleButton BorderThickness="0" Content="{Binding Content}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                Padding="6" FontSize="15" IsEnabled="{Binding IsSelectable}" ToolTip.ShowDelay="0" ToolTip.Placement="Bottom"
+                                                ToolTip.Tip="{Binding HoverTip, Converter={x:Static hsv:GotoHoverTipConverter.Instance}}" />
+                                  <Path Data="{hsv:Icon Chevron}" Fill="{DynamicResource Secondary}"
+                                        Stretch="Uniform" Width="10" Height="10" Margin="2" IsHitTestVisible="False"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                        IsVisible="{Binding !IsGoto}"/>
+                                </Grid>
+                              </Border>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Grid>
+        </ScrollViewer>
+      </Grid>
+    </DockPanel>
+
+    <Border IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" BorderThickness="10"
+       BorderBrush="{DynamicResource Background}" IsVisible="{Binding ShowOverlayText}">
+      <TextBox IsReadOnly="True" FontSize="20"
+         Background="{DynamicResource Background}" BorderBrush="{DynamicResource Accent}" Text="{Binding OverlayText}" />
+    </Border>
+    <Rectangle Name="FocusAnimationElement" StrokeThickness="3" Stroke="{DynamicResource Accent}" IsVisible="False"
+               HorizontalAlignment="Right" VerticalAlignment="Top"/>
+  </Grid>
+</Window>

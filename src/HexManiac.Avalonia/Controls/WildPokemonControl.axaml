@@ -1,0 +1,60 @@
+<!--
+   Ported from HexManiac.WPF/Controls/WildPokemonControl.xaml.
+   WPF swapped each button's Content with a DataTrigger on <Thing>Exists. Avalonia has no
+   DataTrigger, so the same choice is expressed with BooleanConverter (which already carries
+   True/False values) bound straight to Content.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.WildPokemonControl"
+             xmlns:local="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+             xmlns:hsi="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Implementations">
+   <!-- This panel takes you to the table tool, to the appropriate table based on which pokemon you want to edit. -->
+   <!-- It takes you to the page where you see the rate and a textbox for all the pokemon, such as 39B738 in Ruby -->
+   <Grid Width="320" Height="180" Background="{DynamicResource Background}"
+         RowDefinitions="Auto,*,*" ColumnDefinitions="*,*">
+      <Grid.Resources>
+         <hsi:BooleanConverter x:Key="GrassText" True="Show Pokemon in Grass" False="Add Pokemon to Grass" />
+         <hsi:BooleanConverter x:Key="TreeText" True="Show Pokemon in Rocks" False="Add Pokemon to Rocks" />
+         <hsi:BooleanConverter x:Key="SurfText" True="Show Surfing Pokemon" False="Add Surfing Pokemon" />
+         <hsi:BooleanConverter x:Key="FishingText" True="Show Fishing Pokemon" False="Add Fishing Pokemon" />
+      </Grid.Resources>
+      <Grid.Styles>
+         <Style Selector="local|AngleButton">
+            <Setter Property="Direction" Value="Out" />
+            <Setter Property="Width" Value="150" />
+            <Setter Property="Height" Value="24" />
+         </Style>
+         <Style Selector="Decorator">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+         </Style>
+      </Grid.Styles>
+      <StackPanel Grid.ColumnSpan="2">
+         <Border BorderThickness="1" BorderBrush="{DynamicResource Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="65,5" Padding="10,5">
+            <TextBlock TextWrapping="Wrap">
+               Wild pokemon have 3 stats:<LineBreak />
+               &#x2022; Lowest possible level<LineBreak />
+               &#x2022; Highest possible level<LineBreak />
+               &#x2022; Species
+            </TextBlock>
+         </Border>
+      </StackPanel>
+      <Decorator Grid.Row="1">
+         <local:AngleButton Command="{Binding GotoGrass}" ToolTip.Tip="These pokemon will show up in tall grass."
+                            Content="{Binding GrassExists, Converter={StaticResource GrassText}}" />
+      </Decorator>
+      <Decorator Grid.Row="1" Grid.Column="1">
+         <local:AngleButton Command="{Binding GotoTree}" ToolTip.Tip="These pokemon will show up when smashing rocks."
+                            Content="{Binding TreeExists, Converter={StaticResource TreeText}}" />
+      </Decorator>
+      <Decorator Grid.Row="2">
+         <local:AngleButton Command="{Binding GotoSurf}" ToolTip.Tip="These pokemon will show up when surfing."
+                            Content="{Binding SurfExists, Converter={StaticResource SurfText}}" />
+      </Decorator>
+      <Decorator Grid.Row="2" Grid.Column="1">
+         <local:AngleButton Command="{Binding GotoFishing}" ToolTip.Tip="These pokemon will show up when fishing."
+                            Content="{Binding FishingExists, Converter={StaticResource FishingText}}" />
+      </Decorator>
+   </Grid>
+</UserControl>

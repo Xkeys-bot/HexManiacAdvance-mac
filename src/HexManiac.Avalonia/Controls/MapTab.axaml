@@ -1,0 +1,1435 @@
+<!--
+   Ported from HexManiac.WPF/Controls/MapTab.xaml (2043 lines).
+
+   COVERED: blocks panel, events panel (object / warp / script / signpost / fly editors), main
+   map view, tile panel, border panel, tutorials, toolbar, and the key/pointer plumbing.
+   The header panel covers blockset selection, the data-operations (repoint / expand) commands,
+   map fields and map scripts. Connection editing is the one part of the original not reproduced.
+
+   Recurring translations, as elsewhere in the port: Visibility + BoolToVisibility becomes
+   IsVisible; DataTriggers become bound style classes or converter bindings; Storyboards driven
+   by a DataTrigger become property Transitions; and every Mouse* event handler becomes a
+   Pointer* handler attached in code-behind.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.MapTab"
+             xmlns:res="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+             xmlns:local="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+             xmlns:tools="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Tools;assembly=HexManiac.Core"
+             xmlns:map="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Map;assembly=HexManiac.Core"
+             xmlns:models="clr-namespace:HavenSoft.HexManiac.Core.Models;assembly=HexManiac.Core"
+             Focusable="True">
+   <UserControl.Resources>
+      <local:EqualityToBooleanConverter x:Key="Equality" />
+      <local:PointConverter x:Key="PointConverter" />
+   </UserControl.Resources>
+   <UserControl.DataTemplates>
+      <DataTemplate DataType="tools:VisualComboOption">
+         <StackPanel Orientation="Horizontal" Background="Transparent">
+            <TextBlock VerticalAlignment="Center" Margin="0,0,2,0" Text="{Binding Index}" IsVisible="{Binding DisplayIndex}" />
+            <local:PixelImage />
+         </StackPanel>
+      </DataTemplate>
+   </UserControl.DataTemplates>
+   <UserControl.Styles>
+      <Style Selector="local|AngleTextBox.scriptError">
+         <Setter Property="Foreground" Value="{DynamicResource Error}" />
+      </Style>
+      <!-- WPF dimmed the fly tile with a DataTrigger when the map already had a fly event. -->
+      <Style Selector="Border.noFlyEvent">
+         <Setter Property="Opacity" Value=".4" />
+      </Style>
+      <!-- WPF used a Hyperlink; Avalonia has none, so the wiki links are buttons styled as links. -->
+      <Style Selector="Button.link">
+         <Setter Property="Background" Value="Transparent" />
+         <Setter Property="BorderThickness" Value="0" />
+         <Setter Property="Padding" Value="2,0" />
+         <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+         <Setter Property="Cursor" Value="Hand" />
+      </Style>
+      <Style Selector="Button.link:pointerover">
+         <Setter Property="TextBlock.TextDecorations" Value="Underline" />
+      </Style>
+      <Style Selector="Border.slidePanel">
+         <Setter Property="Width" Value="0" />
+         <!-- The inner DockPanel is a fixed 400 wide, so without clipping its content keeps
+              painting while the panel is collapsed to zero width. -->
+         <Setter Property="ClipToBounds" Value="True" />
+         <Setter Property="Transitions">
+            <Transitions><DoubleTransition Property="Width" Duration="0:0:0.3"/></Transitions>
+         </Setter>
+      </Style>
+      <Style Selector="Border.slidePanel.shown">
+         <Setter Property="Width" Value="402" />
+      </Style>
+   </UserControl.Styles>
+
+   <Grid Name="MapBackground" ClipToBounds="True" Background="Transparent"
+         ColumnDefinitions="Auto,*" RowDefinitions="Auto,*">
+
+      <Decorator IsHitTestVisible="False" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-60,0,0" Name="BackButtonWidget" />
+      <Decorator IsHitTestVisible="False" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="96,-60,0,0" Name="UndoButtonWidget" />
+
+      <!-- Blocks Panel -->
+      <DockPanel Grid.Column="0" Grid.RowSpan="2" ZIndex="1" Name="BlockPanel" Background="{DynamicResource Background}">
+         <Rectangle Fill="{DynamicResource Backlight}" Width="1" DockPanel.Dock="Right" />
+         <Grid DockPanel.Dock="Top">
+            <local:AngleBorder Content="Blocks" Direction="Out" Width="100" HorizontalContentAlignment="Center" Margin="0,0,0,4" />
+            <Button Width="20" Height="20" HorizontalAlignment="Right" Margin="1" Command="{res:MethodCommand Cancel}">
+               <Button.IsVisible>
+                  <MultiBinding Converter="{x:Static res:AnyTrueConverter.Instance}">
+                     <Binding Path="BlockEditorVisible" />
+                     <Binding Path="DrawMultipleTiles" />
+                  </MultiBinding>
+               </Button.IsVisible>
+               <Path Data="{res:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+            </Button>
+         </Grid>
+         <Grid Width="{Binding Blocks.ScaledWidth}" MinHeight="100" DockPanel.Dock="Top">
+            <!-- The shorthand "Auto,75" cannot carry MinHeight, and without it row 0 collapses to
+                 the size of the block preview and row 1's bottom-aligned content overlaps it. -->
+            <Grid.RowDefinitions>
+               <RowDefinition Height="Auto" MinHeight="112"/>
+               <RowDefinition Height="75"/>
+            </Grid.RowDefinitions>
+            <CheckBox HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="5,10,10,35" Grid.Row="1"
+                  Content="Automatic Movement Permission" IsChecked="{Binding AutoUpdateCollision, Mode=TwoWay}"
+                  >
+               <ToolTip.Tip>
+                  <TextBlock>Update Movement Permission Selection based on Most Common Permission for selected block.<LineBreak/>For example, if you select a tree, it'll set the movement permission based on other trees.</TextBlock>
+               </ToolTip.Tip>
+            </CheckBox>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="0,10" Grid.Row="1">
+               <local:AngleBorder Direction="Left" VerticalAlignment="Stretch">
+                  <TextBlock Text="Movement:" Margin="4,0" Height="30"/>
+               </local:AngleBorder>
+               <local:AngleComboBox Direction="Out" Width="135" Height="20"
+                  ItemsSource="{Binding PrimaryMap.BlockEditor.MovementPermissions}" SelectedIndex="{Binding CollisionIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+            </StackPanel>
+            <StackPanel Orientation="Vertical" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,0,12" Grid.Row="1" IsVisible="{Binding BlockEditorVisible}">
+               <local:AngleBorder Direction="Out" VerticalAlignment="Stretch" Content="Block ID" />
+               <TextBlock Text="{Binding DrawBlockIndex}" HorizontalAlignment="Center" Margin="0,5,0,0" />
+            </StackPanel>
+            <Decorator Grid.Row="1" Height="20" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,30,55" IsVisible="{Binding BlockEditorVisible}">
+               <local:AngleButton DataContext="{Binding PrimaryMap.BlockEditor}" Content="Edit Block" x:Name="EditBlockButton"
+                   Direction="Right" Padding="2,0" Command="{res:MethodCommand ToggleShowTiles}" />
+            </Decorator>
+            <StackPanel Name="BlockBag" VerticalAlignment="Bottom" HorizontalAlignment="Left"
+                        Orientation="Horizontal" IsVisible="{Binding BlockBagVisible}">
+               <ToolTip.Tip>
+                  <TextBlock>Ctrl+Click to add/remove blocks from the mixing bag.<LineBreak/>Ctrl+Click the bag icon to empty it.<LineBreak/><LineBreak/>When drawing a block from the mixing bag,<LineBreak/>any block from the mixing bag will be used at random.<LineBreak/><Run FontStyle="Italic">(Also works with double-click.)</Run><LineBreak/><LineBreak/>Use it to make more interesting grass or ground.</TextBlock>
+               </ToolTip.Tip>
+               <Path Data="{res:Icon Bag}" Fill="{DynamicResource Primary}" Width="16" Height="16" Stretch="Fill" />
+               <local:PixelImage VerticalAlignment="Center" DataContext="{Binding BlockBag}" />
+            </StackPanel>
+            <Decorator HorizontalAlignment="Center" VerticalAlignment="Center">
+               <Decorator.IsVisible>
+                  <MultiBinding Converter="{x:Static res:AnyTrueConverter.Instance}">
+                     <Binding Path="BlockEditorVisible" />
+                     <Binding Path="DrawMultipleTiles" />
+                     <Binding Path="IsValid9GridSelection" />
+                  </MultiBinding>
+               </Decorator.IsVisible>
+               <local:PixelImage DataContext="{Binding MultiTileDrawRender}" />
+            </Decorator>
+            <TextBlock IsVisible="{Binding IsSingleBlock}" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Top">
+               <Run Text="Usage Count:" /><Run Text=" " /><Run Text="{Binding BlockUsageCount, Mode=OneWay}" />
+            </TextBlock>
+            <CheckBox IsChecked="{Binding Use9Grid, Mode=TwoWay}" Content="Draw 9-Grid" VerticalAlignment="Top" Grid.Row="1" HorizontalAlignment="Center"
+                      IsVisible="{Binding IsValid9GridSelection}"
+                      ToolTip.Tip="Draw one of the selected 9 blocks based on a grid." />
+         </Grid>
+         <ScrollViewer Name="BlockViewer" Margin="0,0,-1,0">
+            <Canvas Width="{Binding Blocks.ScaledWidth}" Height="{Binding Blocks.ScaledHeight}">
+               <!-- Named so the pointer handlers can hang off the image, not the ScrollViewer:
+                    a position taken from the viewport ignores the scroll offset and picks the
+                    wrong block as soon as the list is scrolled. -->
+               <local:PixelImage x:Name="BlockRenderImage" DataContext="{Binding Blocks}" />
+               <!--
+                  The block-selection highlight pops from 3x down to 1x each time the selection
+                  changes. WPF ran that from a DataTrigger on BlockSelectionToggle with a
+                  Storyboard in both the enter and exit action - i.e. the same animation whichever
+                  way the toggle flips. Avalonia gets it from the toggle bound to a style class,
+                  with a transition on the ScaleTransform (see the blockSelection styles above).
+               -->
+               <Rectangle x:Name="BlockSelectionHighlight" IsHitTestVisible="False"
+                          Canvas.Left="{Binding HighlightBlockX}" Canvas.Top="{Binding HighlightBlockY}" Margin="-1,-1,0,0"
+                          StrokeThickness="1" Opacity=".5" Width="{Binding HighlightBlockWidth}" Height="{Binding HighlightBlockHeight}"
+                          RenderTransformOrigin="50%,50%"
+                          Stroke="{DynamicResource Background}" Fill="{DynamicResource Primary}" />
+            </Canvas>
+         </ScrollViewer>
+      </DockPanel>
+
+      <!-- Events Panel -->
+      <DockPanel Grid.Column="0" Grid.RowSpan="2" Background="{DynamicResource Background}" ZIndex="1" Name="EventPanel"
+         Width="{Binding #BlockPanel.Bounds.Width}" IsVisible="{Binding ShowEventPanel}">
+         <Grid DockPanel.Dock="Top">
+            <local:AngleBorder Width="100" Content="Events" HorizontalContentAlignment="Center" Direction="Out" />
+            <ToggleButton IsChecked="{Binding ShowEventPanel, Mode=TwoWay}" Width="20" Height="20" HorizontalAlignment="Right" Margin="1">
+               <Path Data="{res:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+            </ToggleButton>
+         </Grid>
+         <Grid DockPanel.Dock="Top" Name="EventCategorySelector" Height="30" ColumnDefinitions="*,*,*">
+            <local:AngleButton Grid.Column="0" Margin="2,0" Content="Prev Group" Direction="Left" VerticalAlignment="Bottom" Height="24"
+                  Command="{Binding SelectedEvent.CycleEventCommand}" CommandParameter="{x:Static map:EventCycleDirection.PreviousCategory}" />
+            <TextBlock Grid.Column="1" TextAlignment="Center">
+               <Run Text="{Binding SelectedEvent.EventType, Mode=OneWay}" /><LineBreak /><Run Text="{Binding SelectedEvent.EventIndex, Mode=OneWay}" />
+            </TextBlock>
+            <local:AngleButton Grid.Column="2" Margin="2,0" Content="Next Group" Direction="Right" VerticalAlignment="Bottom" Height="24"
+                  Command="{Binding SelectedEvent.CycleEventCommand}" CommandParameter="{x:Static map:EventCycleDirection.NextCategory}" />
+         </Grid>
+         <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding PrimaryMap.EventSelectors}" HorizontalAlignment="Center" Width="190">
+            <ItemsControl.ItemsPanel>
+               <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+               <DataTemplate>
+                  <RadioButton GroupName="EventSelector" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+               </DataTemplate>
+            </ItemsControl.ItemTemplate>
+         </ItemsControl>
+
+         <ScrollViewer>
+            <ContentControl DataContext="{Binding SelectedEvent}" Content="{Binding}">
+               <ContentControl.DataTemplates>
+
+                  <DataTemplate DataType="map:ObjectEventViewModel">
+                     <Grid VerticalAlignment="Top" ColumnDefinitions="*,*"
+                           RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                        <StackPanel Margin="2,2,0,2">
+                           <local:AngleBorder Direction="Out" Content="ID:" />
+                           <local:AngleTextBox Direction="Out" TextBinding="{Binding ObjectID, Mode=TwoWay}" />
+                           <CheckBox IsChecked="{Binding ShowGraphicsAsText, Mode=TwoWay}" Content="Dynamic Graphics" />
+                           <StackPanel Orientation="Horizontal" IsVisible="{Binding CanAddDynamicGraphicsToTransitionScript}"
+                                       ToolTip.Tip="Automatically adjust the map transition script to set graphics for this object.">
+                              <TextBlock Text="Insert setvar gfx" />
+                              <local:AngleButton Direction="Right" Height="18" Width="22" Padding="2"
+                                    Command="{res:MethodCommand AddDynamicGraphicsToTransitionScript}">
+                                 <Path Data="{res:Icon Add}" Fill="{DynamicResource Secondary}" Stretch="Uniform" />
+                              </local:AngleButton>
+                           </StackPanel>
+                           <local:AngleComboBox Direction="Out"
+                              SelectedIndex="{Binding DynamicOverworldGraphicsCategories.SelectedIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}"
+                              ItemsSource="{Binding DynamicOverworldGraphicsCategories.FilteredOptions}"
+                              IsVisible="{Binding HasGraphicsInTransitionScript}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,2,2,2">
+                           <local:AngleComboBox Direction="Right" SelectedIndex="{Binding Graphics, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" ItemsSource="{Binding Options}"
+                                                IsVisible="{Binding ShowGraphicsAsText, Converter={x:Static BoolConverters.Not}}" />
+                           <local:AngleTextBox Direction="Out" TextBinding="{Binding GraphicsText, Mode=TwoWay}"
+                                               IsVisible="{Binding ShowGraphicsAsText}" />
+                           <local:AngleComboBox Direction="Out"
+                                 SelectedIndex="{Binding DynamicOverworldGraphicsSelectedIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}"
+                                 ItemsSource="{Binding DynamicOverworldOptions}"
+                                 IsVisible="{Binding HasGraphicsInTransitionScript}" />
+                        </StackPanel>
+
+                        <CheckBox Grid.Row="1" Grid.Column="1" IsVisible="{Binding HasKind}" IsChecked="{Binding Kind, Mode=TwoWay}" Content="Clone">
+                           <ToolTip.Tip>
+                              <TextBlock>
+                                 <Run Text="Clones are copies of NPCs on neighboring maps, listed out-of-bounds in this map."/>
+                                 <LineBreak />
+                                 <Run Text="NPCs at the edge of a neighboring map will only show up properly if they have a clone in this map."/>
+                              </TextBlock>
+                           </ToolTip.Tip>
+                        </CheckBox>
+
+                        <local:AngleBorder Grid.Row="2" Direction="Left" Margin="2,2,0,2" Content="(x, y):" />
+                        <local:AngleTextBox Grid.Row="2" Grid.Column="1" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding XY, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="3" Direction="Left" Margin="2,2,0,2" Content="Elevation:" />
+                        <local:AngleTextBox Grid.Row="3" Grid.Column="1" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding Elevation, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="4" VerticalAlignment="Top" Direction="Out" Margin="2,2,0,2" Content="Movement Type:" />
+                        <!-- FacingOptions is a FilteringComboOptions, so the AngleComboBox binds itself off it. -->
+                        <local:AngleComboBox Grid.Row="4" Grid.Column="1" Margin="0,2,2,2" VerticalAlignment="Top" Direction="Right" DataContext="{Binding FacingOptions}" />
+
+                        <local:AngleBorder Grid.Row="5" Direction="Left" Margin="2,2,0,2" Content="Range:" />
+                        <local:AngleTextBox Grid.Row="5" Grid.Column="1" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding RangeXY, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="6" Direction="Left" Margin="2,2,0,2" Content="Trainer Type:" />
+                        <local:AngleTextBox Grid.Row="6" Grid.Column="1" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding TrainerType, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="7" Direction="Left" Margin="2,2,0,2" Content="Sight / Berry:" />
+                        <local:AngleTextBox Grid.Row="7" Grid.Column="1" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding TrainerRangeOrBerryID, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="8" Direction="Left" Margin="2,2,0,2" Content="Script Address:" />
+                        <local:AngleTextBox Grid.Row="8" Grid.Column="1" Margin="0,2,21,2" Direction="Out"
+                                            Classes.scriptError="{Binding HasScriptAddressError}" ToolTip.Tip="{Binding ScriptAddressError}"
+                                            TextBinding="{Binding ScriptAddressText, Mode=TwoWay}" />
+                        <local:AngleButton Grid.Row="8" Grid.Column="1" HorizontalAlignment="Right" Direction="Right" Command="{res:MethodCommand GotoScript}"
+                              Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+
+                        <local:AngleBorder Grid.Row="9" VerticalAlignment="Top" Direction="Out" Margin="2,2,0,2" Content="Flag:" />
+                        <local:AngleButton Grid.Row="9" Grid.Column="0" HorizontalAlignment="Right" Direction="Right" Command="{res:MethodCommand GenerateNewFlag}"
+                           IsVisible="{Binding CanGenerateNewFlag}"
+                           Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <ToolTip.Tip>
+                              <TextBlock>
+                                 <Run Text="Automatically choose an unused flag."/>
+                                 <LineBreak />
+                                 <Run Text="Flags are used for hiding/showing OWs."/>
+                                 <LineBreak />
+                                 <Run Text="If you never need to hide this OW, it doesn't need a flag."/>
+                              </TextBlock>
+                           </ToolTip.Tip>
+                           <Path Data="{res:Icon Add}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+                        <local:AngleTextBox Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Right" TextBinding="{Binding FlagText, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="10" Direction="Left" Margin="2,2,0,2" Content="Padding:" />
+                        <local:AngleTextBox Grid.Row="10" Grid.Column="1" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding Padding, Mode=TwoWay}" />
+
+                        <!--
+                           Per-kind sub editors. Each is keyed off its own Show* flag on the
+                           ObjectEventViewModel, exactly as WPF had them.
+                        -->
+                        <StackPanel Grid.Row="11" Grid.ColumnSpan="2" Margin="2,12">
+                           <!-- Berry tree -->
+                           <StackPanel IsVisible="{Binding ShowBerryContent}">
+                              <Grid ColumnDefinitions="*,*">
+                                 <local:AngleBorder Direction="Out" Content="Initial Berry:" />
+                                 <local:AngleBorder Direction="Right" Grid.Column="1" Content="{Binding BerryText}" Margin="0,2,21,2" />
+                                 <local:AngleButton Command="{res:MethodCommand GotoBerryCode}" Direction="Right" Grid.Column="1" HorizontalAlignment="Right"
+                                       Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                    <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                 </local:AngleButton>
+                              </Grid>
+                           </StackPanel>
+
+                           <!-- Item ball -->
+                           <StackPanel IsVisible="{Binding ShowItemContents}">
+                              <Grid ColumnDefinitions="*,*">
+                                 <local:AngleBorder Direction="Left" Content="Item:" />
+                                 <local:AngleComboBox Grid.Column="1" Direction="Out" DataContext="{Binding ItemOptions}" />
+                              </Grid>
+                           </StackPanel>
+
+                           <!-- Plain talking NPC -->
+                           <StackPanel IsVisible="{Binding ShowNpcText}">
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Text:" />
+                              <local:TextEditor DataContext="{Binding NpcTextEditor}" Width="244" HorizontalAlignment="Right" MinHeight="60" />
+                           </StackPanel>
+
+                           <!-- Rematch trainer: script-only, so this offers jumps rather than editors -->
+                           <StackPanel IsVisible="{Binding ShowRematchTrainerContent}">
+                              <Border BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Margin="20,10">
+                                 <StackPanel>
+                                    <TextBlock Margin="10,10" TextWrapping="Wrap" FontStyle="Italic" Foreground="{DynamicResource Secondary}"
+                                               Text="(Rematch script logic and text must be edited with the script editor.)" />
+                                    <local:AngleButton Command="{res:MethodCommand GotoScript}" Direction="Right" HorizontalAlignment="Right" Margin="0,-20,2,2"
+                                       Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                       <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                    </local:AngleButton>
+                                 </StackPanel>
+                              </Border>
+                              <Grid>
+                                 <local:AngleButton HorizontalAlignment="Left" Width="100" Margin="0,4" Direction="Right"
+                                                    Content="Edit Rematches" Command="{res:MethodCommand GotoRematches}" />
+                                 <local:AngleButton HorizontalAlignment="Right" Width="150" Margin="0,4" Direction="Right"
+                                                    Content="Convert to Basic Trainer" Command="{res:MethodCommand ReplaceRematchScript}" />
+                              </Grid>
+                              <TabControl ItemsSource="{Binding TrainerTeams}">
+                                 <TabControl.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding TrainerIDText}" /></DataTemplate>
+                                 </TabControl.ItemTemplate>
+                                 <TabControl.ContentTemplate>
+                                    <DataTemplate>
+                                       <Grid Background="{DynamicResource Backlight}">
+                                          <Viewbox HorizontalAlignment="Right" Height="{Binding #RematchTeamBox.Bounds.Height}" Stretch="Uniform" IsHitTestVisible="False" Opacity=".5">
+                                             <ItemsControl ItemsSource="{Binding TeamVisualizations}">
+                                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                   <DataTemplate><local:PixelImage TransparentBrush="{DynamicResource Backlight}"/></DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                             </ItemsControl>
+                                          </Viewbox>
+                                          <local:TextEditor x:Name="RematchTeamBox" DataContext="{Binding TrainerContent}"
+                                             Background="Transparent" HorizontalAlignment="Stretch" IsVisible="{Binding ShowContent}" />
+                                          <Button Command="{res:MethodCommand Refresh}" ToolTip.Tip="Refresh" BorderBrush="{DynamicResource Secondary}"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Top" Width="20" Height="20">
+                                             <Path Data="{res:Icon RotationArrow}" Fill="{DynamicResource Primary}" Stretch="Uniform" />
+                                          </Button>
+                                          <local:AutocompleteOverlay Target="{Binding #RematchTeamBox}" />
+                                       </Grid>
+                                    </DataTemplate>
+                                 </TabControl.ContentTemplate>
+                              </TabControl>
+                           </StackPanel>
+                           <StackPanel IsVisible="{Binding ShowMartContents}">
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Greeting:" />
+                              <local:TextEditor DataContext="{Binding MartHelloEditor}" MinHeight="50" />
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Shop:" />
+                              <Grid HorizontalAlignment="Right" Width="244">
+                                 <TextBox Name="MartTextBox" FontFamily="Consolas" AcceptsReturn="True" Text="{Binding MartContent, Mode=TwoWay}" MinHeight="60" />
+                                 <local:AutocompleteOverlay Target="{Binding #MartTextBox}"/>
+                              </Grid>
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Goodbye:" />
+                              <local:TextEditor DataContext="{Binding MartGoodbyeEditor}" MinHeight="50" />
+                           </StackPanel>
+                           <StackPanel IsVisible="{Binding ShowTrainerContent}">
+                              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                 <local:AngleBorder Direction="Left" Content="Class:" Margin="2,2,0,2" />
+                                 <local:AngleComboBox Grid.Column="1" Direction="Out" Margin="0,2"
+                                                      ItemsSource="{Binding ClassOptions}" SelectedIndex="{Binding TrainerClass, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+                                 <local:AngleBorder Grid.Row="1" Direction="Left" Content="Name:" Margin="2,2,0,2" />
+                                 <local:AngleTextBox Grid.Row="1" Grid.Column="1" Direction="Out" Margin="0,2" TextBinding="{Binding TrainerName, Mode=TwoWay}" />
+                              </Grid>
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Before Battle:" />
+                              <local:TextEditor DataContext="{Binding TrainerBeforeTextEditor}" MinHeight="50" />
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="When You Win:" />
+                              <local:TextEditor DataContext="{Binding TrainerWinTextEditor}" MinHeight="50" />
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="After Battle:" />
+                              <local:TextEditor DataContext="{Binding TrainerAfterTextEditor}" MinHeight="50" />
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Team:" />
+                              <!-- The party sprites sit behind the text, scaled to the editor's height at half opacity. -->
+                              <Grid Background="{DynamicResource Backlight}" Width="230" HorizontalAlignment="Right">
+                                 <Viewbox HorizontalAlignment="Right" Height="{Binding #TrainerTeamBox.Bounds.Height}" Stretch="Uniform" IsHitTestVisible="False" Opacity=".5">
+                                    <ItemsControl ItemsSource="{Binding TeamVisualizations}">
+                                       <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                       <ItemsControl.ItemTemplate>
+                                          <DataTemplate><local:PixelImage TransparentBrush="{DynamicResource Backlight}"/></DataTemplate>
+                                       </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                 </Viewbox>
+                                 <local:TextEditor x:Name="TrainerTeamBox" DataContext="{Binding TrainerContent}" Width="230"
+                                    Background="Transparent" VerticalAlignment="Top" IsVisible="{Binding ShowContent}" />
+                                 <local:AutocompleteOverlay Target="{Binding #TrainerTeamBox}" />
+                              </Grid>
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Edit More:" />
+                              <local:AngleButton Direction="Out" Margin="2,6" Content="Open Trainer Data" Command="{Binding OpenTrainerData}" />
+                           </StackPanel>
+
+                           <!-- Tutor -->
+                           <StackPanel IsVisible="{Binding ShowTutorContent}">
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Info:" />
+                              <local:TextEditor DataContext="{Binding TutorInfoText}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Which Pokemon:" />
+                              <local:TextEditor DataContext="{Binding TutorWhichPokemonText}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <Grid Margin="0,10,0,0" ColumnDefinitions="*,*,Auto">
+                                 <local:AngleBorder Direction="Left" Content="Tutor Move:" />
+                                 <local:AngleComboBox Grid.Column="1" Direction="Out" DataContext="{Binding TutorOptions}" />
+                                 <local:AngleButton Command="{res:MethodCommand GotoTutors}" Direction="Right" Grid.Column="2" HorizontalAlignment="Right"
+                                       Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                    <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                 </local:AngleButton>
+                              </Grid>
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Success:" />
+                              <local:TextEditor DataContext="{Binding TutorSucessText}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Fail:" />
+                              <local:TextEditor DataContext="{Binding TutorFailedText}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                           </StackPanel>
+
+                           <!-- Trade -->
+                           <StackPanel IsVisible="{Binding ShowTradeContent}">
+                              <local:AngleBorder Content="Info:" Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" />
+                              <local:TextEditor DataContext="{Binding TradeInitialEditor}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <Grid Margin="0,10,0,0" ColumnDefinitions="*,*,Auto">
+                                 <local:AngleBorder Direction="Left" Content="Trade:" />
+                                 <local:AngleComboBox Grid.Column="1" Direction="Out" DataContext="{Binding TradeOptions}" />
+                                 <local:AngleButton Command="{res:MethodCommand GotoTrades}" Direction="Right" Grid.Column="2" HorizontalAlignment="Right"
+                                       Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                    <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                 </local:AngleButton>
+                              </Grid>
+                              <local:AngleBorder Content="Cancel:" Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" />
+                              <local:TextEditor DataContext="{Binding TradeFailedEditor}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <local:AngleBorder Content="Wrong Pokemon:" Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" />
+                              <local:TextEditor DataContext="{Binding TradeWrongSpeciesEditor}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <local:AngleBorder Content="Success:" Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" />
+                              <local:TextEditor DataContext="{Binding TradeThanksEditor}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              <local:AngleBorder Content="After Trade:" Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" />
+                              <local:TextEditor DataContext="{Binding TradeSuccessEditor}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                           </StackPanel>
+
+                           <!-- Legendary encounter -->
+                           <StackPanel IsVisible="{Binding ShowLegendaryContent}">
+                              <Grid Margin="0,10,0,0" ColumnDefinitions="*,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+                                 <local:AngleBorder Direction="Left" Content="Pokemon:" Margin="2,2,0,2" />
+                                 <local:AngleComboBox Grid.Column="1" Direction="Out" Margin="0,2" DataContext="{Binding PokemonOptions}" />
+                                 <local:AngleButton Command="{res:MethodCommand GotoPokemon}" Direction="Right" Grid.Column="2" HorizontalAlignment="Right"
+                                                    Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                    <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                 </local:AngleButton>
+
+                                 <local:AngleBorder Grid.Row="1" Direction="Left" Content="Level:" Margin="2,2,0,2" />
+                                 <local:AngleTextBox Grid.Row="1" Grid.Column="1" Direction="Out" Margin="0,2" TextBinding="{Binding Level, Mode=TwoWay}" />
+
+                                 <local:AngleBorder Grid.Row="2" Direction="Left" Content="Hold Item:" Margin="2,2,0,2" />
+                                 <local:AngleComboBox Grid.Row="2" Grid.Column="1" Direction="Out" Margin="0,2" DataContext="{Binding HoldItemOptions}" />
+                                 <local:AngleButton Grid.Row="2" Command="{res:MethodCommand GotoHoldItem}" Direction="Right" Grid.Column="2" HorizontalAlignment="Right"
+                                                    Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                    <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                 </local:AngleButton>
+
+                                 <local:AngleBorder Grid.Row="3" Direction="Left" Content="Capture Flag:" Margin="2,2,0,2" />
+                                 <local:AngleTextBox Grid.Row="3" Grid.Column="1" Direction="Out" Margin="0,2" TextBinding="{Binding LegendaryFlagText, Mode=TwoWay}" />
+                              </Grid>
+                              <StackPanel IsVisible="{Binding HasCryText}">
+                                 <local:AngleBorder Content="Cry:" Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" />
+                                 <local:TextEditor DataContext="{Binding CryEditor}" Width="244" HorizontalAlignment="Right" MinHeight="50" />
+                              </StackPanel>
+                              <TextBlock FontStyle="Italic" Foreground="{DynamicResource Secondary}" Margin="5,10,30,2" TextWrapping="Wrap"
+                                         Text="Use this to make the legendary reappear if you haven't captured it:" />
+                              <local:TextEditor IsReadOnly="True" DataContext="{Binding SampleLegendClearScript}" Height="120" Width="244" HorizontalAlignment="Right" />
+                              <!-- WPF used a Hyperlink inline; Avalonia has none, so this is a link-styled button. -->
+                              <Button Classes="link" HorizontalAlignment="Right" Margin="4" Content="More Info"
+                                      Click="Navigate" Tag="https://github.com/haven1433/HexManiacAdvance/wiki/Legendary-Pok%C3%A9mon-Encounters" />
+                           </StackPanel>
+
+                           <!-- Anything the inline editors cannot represent -->
+                           <StackPanel IsVisible="{Binding ShowNoContent}">
+                              <Border BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Margin="20,10">
+                                 <StackPanel>
+                                    <TextBlock Margin="30,20,30,0" TextWrapping="Wrap" FontStyle="Italic" Foreground="{DynamicResource Secondary}"
+                                               Text="(Elaborate scripts must be edited with the script editor. Only partial editing is available here.)" />
+                                    <local:AngleButton Command="{res:MethodCommand GotoScript}" Direction="Right" HorizontalAlignment="Right" Margin="0,0,2,2"
+                                       Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                       <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                    </local:AngleButton>
+                                 </StackPanel>
+                              </Border>
+
+                              <!--
+                                 Partial editing for a script too elaborate to show fully: any flag,
+                                 item and text the script uses can still be edited here.
+
+                                 This was cut from an earlier round of the port as "invented"
+                                 bindings. That was wrong - HasBasicFlag, BasicFlagText, BasicItem,
+                                 HasBasicItem and BasicText are all real members of
+                                 IEventViewModel, so the cut removed a working feature.
+                              -->
+                              <Grid ColumnDefinitions="*,*" IsVisible="{Binding HasBasicFlag}">
+                                 <local:AngleBorder Direction="Left" Content="Flag:" />
+                                 <local:AngleTextBox Grid.Column="1" Direction="Out" TextBinding="{Binding BasicFlagText, Mode=TwoWay}" />
+                              </Grid>
+                              <Grid ColumnDefinitions="*,*" IsVisible="{Binding HasBasicItem}">
+                                 <local:AngleBorder Direction="Left" Content="Item:" />
+                                 <local:AngleComboBox Grid.Column="1" Direction="Out" DataContext="{Binding BasicItem}" />
+                              </Grid>
+                              <ItemsControl ItemsSource="{Binding BasicText}">
+                                 <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                       <StackPanel>
+                                          <TextBlock Text="{Binding PointerAddressText}" />
+                                          <local:TextEditor DataContext="{Binding Text}" Margin="0,0,0,8" />
+                                       </StackPanel>
+                                    </DataTemplate>
+                                 </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                           </StackPanel>
+                        </StackPanel>
+                     </Grid>
+                  </DataTemplate>
+
+                  <DataTemplate DataType="map:WarpEventViewModel">
+                     <Grid VerticalAlignment="Top" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                        <local:AngleBorder Grid.Row="1" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="(x, y):" />
+                        <local:AngleTextBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding XY, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="2" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Elevation:" />
+                        <local:AngleTextBox Grid.Row="2" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding Elevation, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="3" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Target (bank, map):" />
+                        <StackPanel Grid.Row="3" Grid.Column="1">
+                           <Grid>
+                              <local:AngleTextBox Direction="Out" TextBinding="{Binding BankMap, Mode=TwoWay}" Margin="0,2,24,2" />
+                              <local:AngleButton Command="{res:MethodCommand GotoBankMap}" Direction="Right" HorizontalAlignment="Right"
+                                                 Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                                 <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                              </local:AngleButton>
+                           </Grid>
+                           <TextBlock Text="{Binding TargetMapName}" TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <local:AngleBorder Grid.Row="4" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Target Warp:" />
+                        <local:AngleTextBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding WarpID, Mode=TwoWay}" />
+                     </Grid>
+                  </DataTemplate>
+
+                  <DataTemplate DataType="map:ScriptEventViewModel">
+                     <Grid VerticalAlignment="Top" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                        <local:AngleBorder Grid.Row="1" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="(x, y):" />
+                        <local:AngleTextBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding XY, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="2" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Elevation:" />
+                        <local:AngleTextBox Grid.Row="2" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding Elevation, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="3" VerticalAlignment="Top" Direction="Out" Margin="2,2,0,2" Content="Trigger:" />
+                        <local:AngleButton Command="{res:MethodCommand GenerateNewTrigger}" Direction="Right" Grid.Row="3" Grid.Column="0" HorizontalAlignment="Right"
+                              IsVisible="{Binding CanGenerateNewTrigger}"
+                              Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <Path Data="{res:Icon Add}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+                        <local:AngleTextBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Right" TextBinding="{Binding TriggerHex, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="4" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Index:" />
+                        <local:AngleTextBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding Index, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="7" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Script Address:" />
+                        <local:AngleTextBox Grid.Row="7" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,21,2" Direction="Out"
+                                            Classes.scriptError="{Binding HasScriptAddressError}" ToolTip.Tip="{Binding ScriptAddressError}"
+                                            TextBinding="{Binding ScriptAddressText, Mode=TwoWay}" />
+                        <local:AngleButton Command="{res:MethodCommand GotoScript}" Direction="Right" Grid.Row="7" Grid.Column="1" HorizontalAlignment="Right"
+                              Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+                        <local:AngleButton Command="{res:MethodCommand CreateScript}" Direction="Right" Grid.Row="7" Grid.Column="1" HorizontalAlignment="Right"
+                              IsVisible="{Binding CanCreateScript}"
+                              Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <Path Data="{res:Icon Add}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+                     </Grid>
+                  </DataTemplate>
+
+                  <DataTemplate DataType="map:SignpostEventViewModel">
+                     <Grid VerticalAlignment="Top" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*">
+                        <local:AngleBorder Grid.Row="0" VerticalAlignment="Top" Direction="Out" Margin="2,2,0,2" Content="(x, y):" />
+                        <local:AngleTextBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Right" TextBinding="{Binding XY, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="1" VerticalAlignment="Top" Direction="Out" Margin="2,2,0,2" Content="Elevation:" />
+                        <local:AngleTextBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Right" TextBinding="{Binding Elevation, Mode=TwoWay}" />
+
+                        <local:AngleBorder Grid.Row="2" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Kind:" />
+                        <local:AngleComboBox Grid.Row="2" Grid.Column="1" Direction="Out" Margin="0,2,2,2" ItemsSource="{Binding KindOptions}" SelectedIndex="{Binding Kind, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+
+                        <local:AngleBorder Grid.Row="3" VerticalAlignment="Top" Direction="Out" Margin="2,2,0,2" Content="Secret Base ID:" IsVisible="{Binding ShowArg}" />
+                        <local:AngleTextBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Left"
+                           TextBinding="{Binding ArgText, Mode=TwoWay}" IsVisible="{Binding ShowArg}" />
+
+                        <local:AngleBorder Grid.Row="3" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Script:" IsVisible="{Binding ShowPointer}" />
+                        <local:AngleTextBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,24,2" Direction="Out"
+                           Classes.scriptError="{Binding HasScriptAddressError}" ToolTip.Tip="{Binding ScriptAddressError}"
+                           TextBinding="{Binding PointerText, Mode=TwoWay}" IsVisible="{Binding ShowPointer}" />
+                        <local:AngleButton Grid.Row="3" Grid.Column="1" HorizontalAlignment="Right" Direction="Right" Command="{res:MethodCommand GotoScript}"
+                           IsVisible="{Binding ShowPointer}"
+                           Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <Path Data="{res:Icon RightAngleArrow}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+
+                        <StackPanel Margin="2,12" Grid.Row="4" Grid.RowSpan="3" Grid.ColumnSpan="2" IsVisible="{Binding ShowSignpostText}">
+                           <local:AngleBorder Direction="Right" HorizontalAlignment="Left" Margin="4,10,0,0" Content="Text" />
+                           <TextBox FontFamily="Consolas" AcceptsReturn="True" HorizontalAlignment="Right" Width="244" Text="{Binding SignpostText, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <local:AngleBorder Grid.Row="3" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="Item:" IsVisible="{Binding ShowHiddenItemProperties}" />
+                        <local:AngleComboBox Grid.Row="3" Grid.Column="1" Margin="0,2,2,2" Direction="Out" ItemsSource="{Binding ItemOptions}" SelectedIndex="{Binding ItemID, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}"
+                           IsVisible="{Binding ShowHiddenItemProperties}" />
+
+                        <local:AngleBorder Grid.Row="4" VerticalAlignment="Top" Direction="Right" Margin="2,2,0,2" Content="Hidden Item ID:" IsVisible="{Binding ShowHiddenItemProperties}" />
+                        <local:AngleButton Grid.Row="4" Grid.Column="0" HorizontalAlignment="Right" Direction="Right" Command="{res:MethodCommand GenerateNewHiddenItemID}"
+                           IsVisible="{Binding CanGenerateNewHiddenItemID}" ToolTip.Tip="Automatically choose an unused hidden item ID"
+                           Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}">
+                           <Path Data="{res:Icon Add}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                        </local:AngleButton>
+                        <local:AngleTextBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Right"
+                           TextBinding="{Binding HiddenItemID, Mode=TwoWay}" IsVisible="{Binding ShowHiddenItemProperties}" />
+
+                        <local:AngleBorder Grid.Row="5" VerticalAlignment="Top" Direction="Right" Margin="2,2,0,2" Content="Quantity:" IsVisible="{Binding ShowHiddenItemProperties}" />
+                        <local:AngleTextBox Grid.Row="5" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Right"
+                           TextBinding="{Binding Quantity, Mode=TwoWay}" IsVisible="{Binding ShowHiddenItemProperties}" />
+
+                        <CheckBox Grid.Row="6" Grid.ColumnSpan="2" HorizontalAlignment="Center" Content="Is Beneath Player"
+                           IsChecked="{Binding IsUnderFoot, Mode=TwoWay}" IsVisible="{Binding ShowHiddenItemProperties}" />
+                     </Grid>
+                  </DataTemplate>
+
+                  <DataTemplate DataType="map:FlyEventViewModel">
+                     <Grid VerticalAlignment="Top" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                        <local:AngleBorder Grid.Row="1" VerticalAlignment="Top" Direction="Left" Margin="2,2,0,2" Content="(x, y):" />
+                        <local:AngleTextBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Top" Margin="0,2,2,2" Direction="Out" TextBinding="{Binding XY, Mode=TwoWay}" />
+                     </Grid>
+                  </DataTemplate>
+
+               </ContentControl.DataTemplates>
+            </ContentControl>
+         </ScrollViewer>
+      </DockPanel>
+
+      <!-- Header Panel -->
+      <ScrollViewer Grid.Column="0" Grid.RowSpan="2" Background="{DynamicResource Background}" ZIndex="1" Name="HeaderPanel"
+         Width="{Binding #BlockPanel.Bounds.Width}" IsVisible="{Binding ShowHeaderPanel}">
+         <StackPanel>
+            <Grid>
+               <local:AngleBorder Width="100" HorizontalAlignment="Center" Direction="Out" Content="Map Header" HorizontalContentAlignment="Center" />
+               <Button Width="20" Height="20" HorizontalAlignment="Right" Margin="1" Command="{res:MethodCommand Cancel}">
+                  <Path Data="{res:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+               </Button>
+            </Grid>
+            <local:AngleButton Direction="Out" Margin="5" Content="View Table in Data Tab" DataContext="{Binding PrimaryMap}" Command="{res:MethodCommand GotoData}" />
+            <Menu Margin="0,0,0,5" HorizontalAlignment="Center">
+               <local:AngleMenuItem Header="Export Image" Direction="Out" Padding="20,2">
+                  <MenuItem Header="This Map">
+                     <MenuItem Header="Hide Events" Command="{res:MethodCommand ExportMapImageNoEvents}" />
+                     <MenuItem Header="Show Objects" Command="{res:MethodCommand ExportMapImageObjectEvents}" />
+                     <MenuItem Header="Show All Events" Command="{res:MethodCommand ExportMapImageAllEvents}" />
+                  </MenuItem>
+                  <MenuItem Header="All Connected Maps">
+                     <MenuItem Header="Hide Events" Command="{res:MethodCommand ExportAllMapImagesNoEvents}" />
+                     <MenuItem Header="Show Objects" Command="{res:MethodCommand ExportAllMapImagesObjectEvents}" />
+                     <MenuItem Header="Show All Events" Command="{res:MethodCommand ExportAllMapImagesAllEvents}" />
+                  </MenuItem>
+               </local:AngleMenuItem>
+            </Menu>
+
+            <!-- Blocksets. WPF gave each ComboBoxItem a render preview through an ItemContainerStyle
+                 with a DataTrigger; Avalonia puts that in the item template instead. -->
+            <Grid DataContext="{Binding PrimaryMap.Header}" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+               <local:AngleBorder Direction="Left" Content="Primary Blockset: " />
+               <local:AngleBorder Grid.Row="1" Direction="Left" Content="Secondary Blockset: " />
+               <local:AngleComboBox Grid.Column="1" Direction="Out" Margin="0,2,2,2"
+                                    ItemsSource="{Binding PrimaryOptions}" SelectedIndex="{Binding PrimaryIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}">
+                  <local:AngleComboBox.ItemTemplate>
+                     <DataTemplate><TextBlock Text="{Binding AddressText}" ToolTip.Tip="{Binding Render}" /></DataTemplate>
+                  </local:AngleComboBox.ItemTemplate>
+               </local:AngleComboBox>
+               <local:AngleComboBox Grid.Column="1" Direction="Out" Margin="0,2,2,2" Grid.Row="1"
+                                    ItemsSource="{Binding SecondaryOptions}" SelectedIndex="{Binding SecondaryIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}">
+                  <local:AngleComboBox.ItemTemplate>
+                     <DataTemplate><TextBlock Text="{Binding AddressText}" ToolTip.Tip="{Binding Render}" /></DataTemplate>
+                  </local:AngleComboBox.ItemTemplate>
+               </local:AngleComboBox>
+            </Grid>
+
+            <!--
+               Data Operations. WPF put this 7-column grid in a Popup hung off a checked
+               AngleButton, with Grid.Resources styles giving every AngleButton / AngleBorder /
+               AngleMenuItem in it a common look. Avalonia styles do the same job as a Styles
+               collection scoped to the popup's Border.
+            -->
+            <Grid Height="20" Margin="0,5">
+               <local:AngleButton Content="Data Operations" Width="160" Direction="Out" Padding="2,0" x:Name="DataOperations" />
+               <Popup DataContext="{Binding PrimaryMap.MapRepointer}" Width="420" Height="320" IsLightDismissEnabled="True"
+                      PlacementTarget="{Binding #DataOperations}" IsOpen="{Binding #DataOperations.IsChecked, Mode=TwoWay}">
+                  <Border Background="{DynamicResource Background}" BorderThickness="1" BorderBrush="{DynamicResource Accent}">
+                     <Border.Styles>
+                        <Style Selector="local|AngleButton">
+                           <Setter Property="Margin" Value="2,4" />
+                           <Setter Property="Padding" Value="0" />
+                           <Setter Property="Height" Value="27" />
+                           <Setter Property="ToolTip.ShowDelay" Value="200" />
+                        </Style>
+                        <Style Selector="local|AngleBorder">
+                           <Setter Property="VerticalAlignment" Value="Center" />
+                           <Setter Property="Margin" Value="0,4,0,0" />
+                           <Setter Property="HorizontalContentAlignment" Value="Center" />
+                        </Style>
+                        <Style Selector="local|AngleMenuItem">
+                           <Setter Property="Header" Value="File" />
+                           <Setter Property="Width" Value="56" />
+                           <Setter Property="Margin" Value="0,8,0,4" />
+                           <Setter Property="Background" Value="{DynamicResource Backlight}" />
+                        </Style>
+                        <Style Selector="Menu">
+                           <Setter Property="Background" Value="Transparent" />
+                           <Setter Property="HorizontalAlignment" Value="Center" />
+                           <Setter Property="VerticalAlignment" Value="Center" />
+                        </Style>
+                     </Border.Styles>
+                     <Grid RowDefinitions="*,*,*,*,*,*,*,*,*,*" ColumnDefinitions="*,*,*,*,*,*,*">
+                        <!-- Repoint Layout -->
+                        <local:AngleButton Content="Repoint Layout" Direction="Out" Grid.ColumnSpan="7" Width="200"
+                                           ToolTip.Tip="{Binding RepointLayoutText}" Command="{Binding RepointLayout}" />
+                        <!-- Repoint Border Block -->
+                        <Menu Grid.Row="1" Grid.Column="0">
+                           <local:AngleMenuItem Direction="Left">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportBorderBlock}" ToolTip.Tip="Import a single .bin file." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportBorderBlock}" ToolTip.Tip="Export a single .bin file." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <local:AngleButton Content="Repoint Border Block" Direction="Out" Grid.Row="1" Grid.ColumnSpan="7" Width="200"
+                                           ToolTip.Tip="{Binding RepointBorderText}" Command="{Binding RepointBorderBlock}" />
+                        <!-- Repoint Blockmap -->
+                        <Menu Grid.Row="2" Grid.Column="0">
+                           <local:AngleMenuItem Direction="Left">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportBlockMap}" ToolTip.Tip="Import a single .bin file." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportBlockMap}" ToolTip.Tip="Export a single .bin file." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <local:AngleButton Content="Repoint Blockmap" Direction="Out" Grid.Row="2" Grid.ColumnSpan="7" Width="200"
+                                           ToolTip.Tip="{Binding RepointBlockMapText}" Command="{Binding RepointBlockMap}" />
+                        <!-- Primary / Secondary labels -->
+                        <local:AngleBorder Content="Primary" Direction="Left" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" />
+                        <local:AngleBorder Content="Secondary" Direction="Right" Grid.Row="3" Grid.Column="4" Grid.ColumnSpan="3" />
+                        <!-- Repoint Blockset -->
+                        <local:AngleButton Content="Repoint" Direction="Left" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                                           ToolTip.Tip="{Binding RepointPrimaryBlocksetText}" Command="{Binding RepointPrimaryBlockset}" />
+                        <local:AngleBorder Content="Blockset" Direction="Out" Grid.Row="4" Grid.Column="3" />
+                        <local:AngleButton Content="Repoint" Direction="Right" Grid.Row="4" Grid.Column="4" Grid.ColumnSpan="2"
+                                           ToolTip.Tip="{Binding RepointSecondaryBlocksetText}" Command="{Binding RepointSecondaryBlockset}" />
+                        <!-- Expand Blocks/Attributes -->
+                        <Menu Grid.Row="5" Grid.Column="0" ToolTip.Tip="Blocks are stored as a pair of .bin files, one for the visuals and one for the attributes.">
+                           <local:AngleMenuItem Direction="Left">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportPrimaryBlocks}" ToolTip.Tip="Import a pair of .bin files." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportPrimaryBlocks}" ToolTip.Tip="Export a pair of .bin files." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <local:AngleButton Content="Repoint" Direction="Left" Grid.Row="5" Grid.Column="1"
+                                           ToolTip.Tip="{Binding RepointPrimaryBlocksText}" Command="{Binding RepointPrimaryBlocks}" />
+                        <local:AngleButton Content="Expand" Direction="Left" Grid.Row="5" Grid.Column="2"
+                                           ToolTip.Tip="{Binding ExpandPrimaryBlocksText}" Command="{Binding ExpandPrimaryBlocks}" />
+                        <local:AngleBorder Content="Blocks" Direction="Out" Grid.Row="5" Grid.Column="3" />
+                        <local:AngleButton Content="Expand" Direction="Right" Grid.Row="5" Grid.Column="4"
+                                           ToolTip.Tip="{Binding ExpandSecondaryBlocksText}" Command="{Binding ExpandSecondaryBlocks}" />
+                        <local:AngleButton Content="Repoint" Direction="Right" Grid.Row="5" Grid.Column="5"
+                                           ToolTip.Tip="{Binding RepointSecondaryBlocksText}" Command="{Binding RepointSecondaryBlocks}" />
+                        <Menu Grid.Row="5" Grid.Column="6" ToolTip.Tip="Blocks are stored as a pair of .bin files, one for the visuals and one for the attributes.">
+                           <local:AngleMenuItem Direction="Right">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportSecondaryBlocks}" ToolTip.Tip="Import a pair of .bin files." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportSecondaryBlocks}" ToolTip.Tip="Export a pair of .bin files." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <!-- Tileset -->
+                        <Menu Grid.Row="6" Grid.Column="0" ToolTip.Tip="Tilesets are stored as a single .bin file that contains all the tiles.">
+                           <local:AngleMenuItem Direction="Left">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportPrimaryTileset}" ToolTip.Tip="Import a single .bin file." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportPrimaryTileset}" ToolTip.Tip="Export a single .bin file." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <local:AngleButton Content="Repoint" Direction="Left" Grid.Row="6" Grid.Column="1"
+                                           ToolTip.Tip="{Binding RepointPrimaryTilesetText}" Command="{Binding RepointPrimaryTileset}" />
+                        <local:AngleButton Content="Expand" Direction="Left" Grid.Row="6" Grid.Column="2"
+                                           ToolTip.Tip="{Binding ExpandPrimaryTilesetText}" Command="{Binding ExpandPrimaryTileset}" />
+                        <local:AngleBorder Content="Tileset" Direction="Out" Grid.Row="6" Grid.Column="3" />
+                        <local:AngleButton Content="Expand" Direction="Right" Grid.Row="6" Grid.Column="4"
+                                           ToolTip.Tip="{Binding ExpandSecondaryTilesetText}" Command="{Binding ExpandSecondaryTileset}" />
+                        <local:AngleButton Content="Repoint" Direction="Right" Grid.Row="6" Grid.Column="5"
+                                           ToolTip.Tip="{Binding RepointSecondaryTilesetText}" Command="{Binding RepointSecondaryTileset}" />
+                        <Menu Grid.Row="6" Grid.Column="6" ToolTip.Tip="Tilesets are stored as a single .bin file that contains all the tiles.">
+                           <local:AngleMenuItem Direction="Right">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportSecondaryTileset}" ToolTip.Tip="Import a single .bin file."/>
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportSecondaryTileset}" ToolTip.Tip="Export a single .bin file." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <!-- Palette -->
+                        <Menu Grid.Row="7" Grid.Column="0" ToolTip.Tip="Palettes are stored as 16 .pal files, one for each palette in the collection.">
+                           <local:AngleMenuItem Direction="Left">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportPrimaryPalette}" ToolTip.Tip="Import files named 00.pal, 01.pal, ... 0F.pal, 10.pal from a single folder." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportPrimaryPalette}" ToolTip.Tip="Export files named 00.pal, 01.pal, ... 0F.pal, 10.pal to a single folder." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <local:AngleButton Content="Repoint" Direction="Left" Grid.Row="7" Grid.Column="1"
+                                           ToolTip.Tip="{Binding RepointPrimaryPaletteText}" Command="{Binding RepointPrimaryPalette}" />
+                        <local:AngleButton Content="Expand" Direction="Left" Grid.Row="7" Grid.Column="2"
+                                           ToolTip.Tip="{Binding ExpandPrimaryPaletteText}" Command="{Binding ExpandPrimaryPalette}" />
+                        <local:AngleBorder Content="Palette" Direction="Out" Grid.Row="7" Grid.Column="3" />
+                        <local:AngleButton Content="Expand" Direction="Right" Grid.Row="7" Grid.Column="4"
+                                           ToolTip.Tip="{Binding ExpandSecondaryPaletteText}" Command="{Binding ExpandSecondaryPalette}" />
+                        <local:AngleButton Content="Repoint" Direction="Right" Grid.Row="7" Grid.Column="5"
+                                           ToolTip.Tip="{Binding RepointSecondaryPaletteText}" Command="{Binding RepointSecondaryPalette}" />
+                        <Menu Grid.Row="7" Grid.Column="6" ToolTip.Tip="Palettes are stored as 16 .pal files, one for each palette in the collection.">
+                           <local:AngleMenuItem Direction="Right">
+                              <MenuItem Header="Import" Command="{res:MethodCommand ImportSecondaryPalette}" ToolTip.Tip="Import files named 00.pal, 01.pal, ... 0F.pal, 10.pal from a single folder." />
+                              <MenuItem Header="Export" Command="{res:MethodCommand ExportSecondaryPalette}" ToolTip.Tip="Export files named 00.pal, 01.pal, ... 0F.pal, 10.pal to a single folder." />
+                           </local:AngleMenuItem>
+                        </Menu>
+                        <!-- Create Primary Animations -->
+                        <local:AngleButton Content="Create" Direction="Left" Grid.Row="8" Grid.Column="1"
+                                           ToolTip.Tip="{Binding CreatePrimaryTilesetAnimationsText}" Command="{Binding CreatePrimaryTilesetAnimations}" />
+                        <local:AngleBorder Content="Animation" Direction="Out" Grid.Row="8" Grid.Column="2" Grid.ColumnSpan="3" />
+                        <local:AngleButton Content="Create" Direction="Right" Grid.Row="8" Grid.Column="5"
+                                           ToolTip.Tip="{Binding CreatePrimaryTilesetAnimationsText}" Command="{Binding CreateSecondaryTilesetAnimations}" />
+                        <!-- Duplicate Map (Using Same Layout) -->
+                        <local:AngleButton Content="Duplicate Map" Direction="Out" Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="5" Width="200"
+                                           ToolTip.Tip="{Binding DuplicateMapText}" Command="{Binding DuplicateMap}" />
+                     </Grid>
+                  </Border>
+               </Popup>
+            </Grid>
+
+            <!-- Layouts shared between maps -->
+            <StackPanel IsVisible="{Binding PrimaryMap.BlockMapIsShared}">
+               <TextBlock TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" FontStyle="Italic" Foreground="{DynamicResource Data2}">
+                  <Run Text="This layout is used by "/><Run Text="{Binding PrimaryMap.BlockMapShareCount, Mode=OneWay}" /><Run Text=" maps."/>
+               </TextBlock>
+               <ItemsControl ItemsSource="{Binding PrimaryMap.BlockMapUses}">
+                  <ItemsControl.ItemsPanel>
+                     <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                     <DataTemplate>
+                        <Button Width="52" Height="24" ToolTip.Tip="{Binding Name}" Command="{res:MethodCommand GotoMap}" CommandParameter="{Binding}" Margin="4">
+                           <TextBlock>
+                              <Run Text="{Binding Group, Mode=OneWay}" /><Run Text="-" /><Run Text="{Binding Map, Mode=OneWay}" />
+                           </TextBlock>
+                        </Button>
+                     </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+               </ItemsControl>
+            </StackPanel>
+
+            <!-- Z-connections (dive / emerge) -->
+            <Grid Height="24" Margin="0,5,0,25" DataContext="{Binding PrimaryMap.SurfConnection}">
+               <Menu Background="Transparent" VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding CanCreate}">
+                  <local:AngleMenuItem Header="New Z-Connection" Direction="Out">
+                     <MenuItem Header="Dive to Existing Map" Command="{res:MethodCommand DiveExisting}" />
+                     <MenuItem Header="Emerge to Existing Map" Command="{res:MethodCommand EmergeExisting}" />
+                     <MenuItem Header="Dive to New Map" Command="{res:MethodCommand DiveNew}" />
+                     <MenuItem Header="Emerge to New Map" Command="{res:MethodCommand EmergeNew}" />
+                  </local:AngleMenuItem>
+               </Menu>
+               <StackPanel Orientation="Horizontal" IsVisible="{Binding CanWarp}">
+                  <!-- WPF swapped the caption with a DataTrigger on CanEmerge. -->
+                  <local:AngleButton Direction="Out" Command="{res:MethodCommand FollowConnection}" Width="120">
+                     <Panel>
+                        <TextBlock Text="Dive" IsVisible="{Binding !CanEmerge}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Emerge" IsVisible="{Binding CanEmerge}" HorizontalAlignment="Center" />
+                     </Panel>
+                  </local:AngleButton>
+                  <local:AngleButton Direction="Right" Content="Delete Connection" Command="{res:MethodCommand RemoveConnection}" Width="120" />
+               </StackPanel>
+            </Grid>
+
+            <!-- Map fields -->
+            <Grid DataContext="{Binding PrimaryMap.Header}" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+               <local:AngleBorder Direction="Left" Margin="2" Content="Map Name:" />
+               <local:AngleComboBox Grid.Column="1" Direction="Out" Margin="2,2,24,2"
+                                    ItemsSource="{Binding $parent[ScrollViewer].DataContext.PrimaryMap.AvailableNames}"
+                                    SelectedIndex="{Binding $parent[ScrollViewer].DataContext.PrimaryMap.SelectedNameIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+               <!-- Jumps to the map-names table itself, for editing the name rather than picking one. -->
+               <local:AngleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  DataContext="{Binding $parent[ScrollViewer].DataContext}"
+                                  Direction="Right" Padding="0" Width="20" Height="18"
+                                  Command="{res:MethodCommand GotoMapNames}" ToolTip.Tip="Go to the map names table">
+                  <Path Fill="{DynamicResource Secondary}" Stretch="Fill" Data="{res:Icon RightAngleArrow}" Width="10" Height="12" />
+               </local:AngleButton>
+
+               <local:AngleBorder Grid.Row="1" Direction="Left" Margin="2" Content="Music:" />
+               <local:AngleComboBox Grid.Row="1" Grid.Column="1" Direction="Out" Margin="2" IsVisible="{Binding HasMusicOptions}"
+                                    ItemsSource="{Binding MusicOptions}" SelectedIndex="{Binding Music, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+
+               <local:AngleBorder Grid.Row="2" Direction="Left" Margin="2" Content="Cave:" />
+               <local:AngleComboBox Grid.Row="2" Grid.Column="1" Direction="Out" Margin="2"
+                                    ItemsSource="{Binding CaveOptions}" SelectedIndex="{Binding Cave, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+
+               <local:AngleBorder Grid.Row="3" Direction="Left" Margin="2" Content="Weather:" />
+               <local:AngleComboBox Grid.Row="3" Grid.Column="1" Direction="Out" Margin="2"
+                                    ItemsSource="{Binding WeatherOptions}" SelectedIndex="{Binding Weather, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+
+               <local:AngleBorder Grid.Row="4" Direction="Left" Margin="2" Content="MapType:" IsVisible="{Binding HasMapTypeOptions}" />
+               <local:AngleComboBox Grid.Row="4" Grid.Column="1" Direction="Out" Margin="2" IsVisible="{Binding HasMapTypeOptions}"
+                                    ItemsSource="{Binding MapTypeOptions}" SelectedIndex="{Binding MapType, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+
+               <local:AngleBorder Grid.Row="5" Direction="Left" Margin="2" Content="BattleType:" />
+               <local:AngleComboBox Grid.Row="5" Grid.Column="1" Direction="Out" Margin="2"
+                                    ItemsSource="{Binding BattleOptions}" SelectedIndex="{Binding BattleType, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+
+               <local:AngleBorder Grid.Row="6" Direction="Left" Margin="2" Content="FloorNum:" IsVisible="{Binding ShowFloorNumField}" />
+               <local:AngleTextBox Grid.Row="6" Grid.Column="1" Direction="Out" Margin="2" IsVisible="{Binding ShowFloorNumField}"
+                                   TextBinding="{Binding FloorNum, Mode=TwoWay}" />
+
+               <StackPanel Grid.Row="7" Grid.ColumnSpan="2" Margin="4">
+                  <CheckBox Content="Allow Running" IsChecked="{Binding AllowRunning, Mode=TwoWay}" />
+                  <CheckBox Content="Show Map Name" IsChecked="{Binding ShowMapName, Mode=TwoWay}" />
+                  <CheckBox Content="Allow Biking" IsChecked="{Binding AllowBiking, Mode=TwoWay}" IsVisible="{Binding ShowAllowBikingField}" />
+                  <CheckBox Content="Allow Escaping" IsChecked="{Binding AllowEscaping, Mode=TwoWay}" />
+               </StackPanel>
+            </Grid>
+
+            <!--
+               Map scripts. ShowMapScript / MoreScriptsTruncated / HasSubScripts live on each
+               MapScriptViewModel, not on the collection, so every IsVisible here is inside the
+               item template. WPF put the VisualOption tooltip in DockPanel.Resources; Avalonia
+               resolves data templates from DataTemplates, not Resources.
+            -->
+            <local:AngleBorder Direction="Out" Content="Map Scripts:" Margin="8,8,8,2" />
+            <ItemsControl ItemsSource="{Binding PrimaryMap.MapScriptCollection.Scripts}">
+               <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                     <Grid>
+                        <StackPanel IsVisible="{Binding ShowMapScript}">
+                           <DockPanel Margin="2">
+                              <DockPanel.DataTemplates>
+                                 <DataTemplate DataType="{x:Type models:VisualOption}">
+                                    <TextBlock Text="{Binding Option}">
+                                       <ToolTip.Tip>
+                                          <TextBlock>
+                                             <Bold><Run Text="{Binding ShortDescription}" /></Bold>
+                                             <LineBreak /><LineBreak />
+                                             <Run Text="{Binding Description}" />
+                                          </TextBlock>
+                                       </ToolTip.Tip>
+                                    </TextBlock>
+                                 </DataTemplate>
+                              </DockPanel.DataTemplates>
+                              <local:AngleButton Command="{res:MethodCommand Delete}" DockPanel.Dock="Left" Direction="Left" Padding="0" VerticalAlignment="Center" Height="18">
+                                 <Path Fill="{DynamicResource Secondary}" Stretch="Uniform" Data="{res:Icon Exit}" Width="10" Height="20" />
+                              </local:AngleButton>
+                              <local:AngleButton Command="{res:MethodCommand Goto}" DockPanel.Dock="Right" Direction="Right" Padding="0" Width="20" Height="18">
+                                 <Path Fill="{DynamicResource Secondary}" Stretch="Fill" Data="{res:Icon RightAngleArrow}" Width="10" Height="12" />
+                              </local:AngleButton>
+                              <local:AngleComboBox SelectedIndex="{Binding ScriptTypeIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" ItemsSource="{Binding ScriptOptions}" Direction="Out" DockPanel.Dock="Left" Width="140" Height="18" />
+                              <local:AngleTextBox Direction="Right" TextBinding="{Binding Address, Mode=TwoWay}" />
+                           </DockPanel>
+                           <ItemsControl IsVisible="{Binding HasSubScripts}" ItemsSource="{Binding SubScripts}">
+                              <ItemsControl.ItemTemplate>
+                                 <DataTemplate>
+                                    <StackPanel Margin="8,2">
+                                       <DockPanel>
+                                          <local:AngleButton Command="{res:MethodCommand Delete}" DockPanel.Dock="Left" Direction="Left" Padding="0" VerticalAlignment="Center" Height="18">
+                                             <Path Fill="{DynamicResource Secondary}" Stretch="Uniform" Data="{res:Icon Exit}" Width="10" Height="20" />
+                                          </local:AngleButton>
+                                          <local:AngleButton Command="{res:MethodCommand Goto}" DockPanel.Dock="Right" Direction="Right" Padding="0" Width="20" Height="18">
+                                             <Path Fill="{DynamicResource Secondary}" Stretch="Fill" Data="{res:Icon RightAngleArrow}" Width="10" Height="12" />
+                                          </local:AngleButton>
+                                          <local:AngleBorder Direction="Left" Content="Address:" Padding="2,0" />
+                                          <local:AngleTextBox Direction="Out" TextBinding="{Binding Address, Mode=TwoWay}" />
+                                       </DockPanel>
+                                       <UniformGrid Columns="4" Margin="20,0">
+                                          <Grid>
+                                             <local:AngleBorder Direction="Out" Content="Var:" />
+                                             <local:AngleButton HorizontalAlignment="Right" Direction="Right" Command="{res:MethodCommand GenerateNewVar}"
+                                                   IsVisible="{Binding CanGenerateNewVar}"
+                                                   Width="22" Height="18" IsTabStop="False" Padding="0,2" BorderBrush="{DynamicResource Backlight}"
+                                                   ToolTip.Tip="Automatically choose an unused var.">
+                                                <Path Data="{res:Icon Add}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+                                             </local:AngleButton>
+                                          </Grid>
+                                          <local:AngleTextBox Direction="Right" TextBinding="{Binding Variable, Mode=TwoWay}" Margin="0,0,2,0" />
+                                          <local:AngleBorder Direction="Out" Content="Value:" Margin="2,0,0,0" />
+                                          <local:AngleTextBox Direction="Right" TextBinding="{Binding Value, Mode=TwoWay}" />
+                                       </UniformGrid>
+                                    </StackPanel>
+                                 </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                           </ItemsControl>
+                           <local:AngleButton Margin="8,2" IsVisible="{Binding HasSubScripts}" Command="{res:MethodCommand AddSubScript}" Direction="Out" Content="Add Table Script" />
+                        </StackPanel>
+                        <TextBlock IsVisible="{Binding MoreScriptsTruncated}" FontStyle="Italic"
+                           Text="Further scripts truncated for performance. View the table data to see the remaining scripts." TextWrapping="Wrap" />
+                     </Grid>
+                  </DataTemplate>
+               </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <local:AngleButton DataContext="{Binding PrimaryMap.MapScriptCollection}" Content="Add New Script" Direction="Out" Margin="2"
+                               Command="{res:MethodCommand AddScript}" IsVisible="{Binding AllowAddMoreScripts}" />
+         </StackPanel>
+      </ScrollViewer>
+
+      <!-- Main View -->
+      <ItemsControl Grid.Column="1" Grid.Row="1" Name="MapView" ItemsSource="{Binding VisibleMaps}"
+                    UseLayoutRounding="True" ClipToBounds="True" Focusable="False">
+         <ItemsControl.RenderTransform>
+            <TranslateTransform/>
+         </ItemsControl.RenderTransform>
+         <!--
+            WPF set Canvas.Top / Canvas.Left / ZIndex through an ItemContainerStyle, and they have
+            to stay on the *container*: the Canvas positions the generated ContentPresenter, so
+            attached properties written inside the ItemTemplate land on the image instead and every
+            map draws at the canvas origin. (That is what put the map in the bottom-right corner
+            rather than centred - each BlockMapViewModel places itself at -PixelWidth/2, -PixelHeight/2
+            and relies on those offsets reaching the container.)
+         -->
+         <ItemsControl.Styles>
+            <Style Selector="ItemsControl#MapView > ContentPresenter">
+               <Setter Property="Canvas.Top" Value="{Binding TopEdge}" />
+               <Setter Property="Canvas.Left" Value="{Binding LeftEdge}" />
+               <Setter Property="ZIndex" Value="{Binding ZIndex}" />
+            </Style>
+         </ItemsControl.Styles>
+         <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+               <Canvas HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False"/>
+            </ItemsPanelTemplate>
+         </ItemsControl.ItemsPanel>
+         <ItemsControl.ItemTemplate>
+            <DataTemplate>
+               <!--
+                  Holding space reveals the maps underneath through a growing circular hole around
+                  the cursor. WPF animated the two GradientStop offsets with a Storyboard from a
+                  DataTrigger on ShowBeneath. Avalonia has neither DataTriggers nor an Animatable
+                  GradientStop, so the offsets start closed here and MapTab.axaml.cs eases them.
+               -->
+               <local:PixelImage x:Name="MapImage">
+                  <local:PixelImage.OpacityMask>
+                     <RadialGradientBrush RadiusX="{Binding WidthRatio}" RadiusY="{Binding HeightRatio}"
+                                          GradientOrigin="{Binding HoverPoint, Converter={StaticResource PointConverter}}"
+                                          Center="{Binding HoverPoint, Converter={StaticResource PointConverter}}">
+                        <GradientStop Color="Transparent" Offset="0" />
+                        <GradientStop Color="White" Offset="0" />
+                     </RadialGradientBrush>
+                  </local:PixelImage.OpacityMask>
+               </local:PixelImage>
+            </DataTemplate>
+         </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!--
+         Connection shifters. WPF positioned these with an ItemContainerStyle whose DataTriggers
+         chose Canvas.Left vs Canvas.Right (and Top vs Bottom) from AnchorLeftEdge / AnchorTopEdge.
+         Avalonia setters cannot be swapped by a trigger like that, so all four attached properties
+         are set and the two that should not apply are given NaN, which Canvas ignores - the
+         converter below turns "anchored to this edge" into the offset and everything else into NaN.
+      -->
+      <ItemsControl Grid.Column="1" Grid.Row="1" Name="MapButtons" ItemsSource="{Binding MapButtons}" Focusable="False" ZIndex="2">
+         <ItemsControl.Styles>
+            <Style Selector="ItemsControl#MapButtons > ContentPresenter">
+               <Setter Property="Canvas.Left">
+                  <MultiBinding Converter="{x:Static res:EdgeAnchorConverter.Leading}">
+                     <Binding Path="AnchorPositionX" /><Binding Path="AnchorLeftEdge" />
+                  </MultiBinding>
+               </Setter>
+               <Setter Property="Canvas.Right">
+                  <MultiBinding Converter="{x:Static res:EdgeAnchorConverter.Trailing}">
+                     <Binding Path="AnchorPositionX" /><Binding Path="AnchorLeftEdge" />
+                  </MultiBinding>
+               </Setter>
+               <Setter Property="Canvas.Top">
+                  <MultiBinding Converter="{x:Static res:EdgeAnchorConverter.Leading}">
+                     <Binding Path="AnchorPositionY" /><Binding Path="AnchorTopEdge" />
+                  </MultiBinding>
+               </Setter>
+               <Setter Property="Canvas.Bottom">
+                  <MultiBinding Converter="{x:Static res:EdgeAnchorConverter.Trailing}">
+                     <Binding Path="AnchorPositionY" /><Binding Path="AnchorTopEdge" />
+                  </MultiBinding>
+               </Setter>
+            </Style>
+         </ItemsControl.Styles>
+         <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+               <Canvas HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False" />
+            </ItemsPanelTemplate>
+         </ItemsControl.ItemsPanel>
+         <ItemsControl.ItemTemplate>
+            <DataTemplate>
+               <Border Name="PathBackground" PointerPressed="ShifterDown" PointerMoved="ShifterMove" PointerReleased="ShifterUp"
+                       Width="20" Height="20" Background="{DynamicResource Backlight}"
+                       ToolTip.ShowDelay="0" ToolTip.Tip="{Binding Tooltip}">
+                  <!-- WPF picked the arrow with a DataTrigger per MapSliderIcons value. -->
+                  <Path Name="Path" Fill="{DynamicResource Secondary}" Stretch="Uniform"
+                        Data="{Binding Icon, Converter={x:Static res:MapSliderIconConverter.Instance}}" />
+                  <Border.ContextMenu>
+                     <ContextMenu IsEnabled="{Binding EnableContextMenu}" ItemsSource="{Binding ContextItems}">
+                        <ContextMenu.ItemContainerTheme>
+                           <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                              <Setter Property="Header" Value="{Binding Text}" />
+                              <Setter Property="Command" Value="{Binding}" />
+                              <Setter Property="CommandParameter" Value="{Binding Parameter}" />
+                           </ControlTheme>
+                        </ContextMenu.ItemContainerTheme>
+                     </ContextMenu>
+                  </Border.ContextMenu>
+               </Border>
+            </DataTemplate>
+         </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- The block-selection highlight that follows the cursor over the map. -->
+      <Rectangle Grid.Column="1" Grid.Row="1" Name="HighlightCursorRect" StrokeThickness="2" IsHitTestVisible="False"
+                 Margin="-2,-2,0,0" IsVisible="{Binding ShowHighlightCursor}" ZIndex="2"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" Stroke="{DynamicResource Backlight}"
+                 Width="{Binding HighlightCursorWidth, Mode=OneWay}" Height="{Binding HighlightCursorHeight, Mode=OneWay}">
+         <Rectangle.RenderTransform>
+            <TranslateTransform X="{Binding HighlightCursorX, Mode=OneWay}" Y="{Binding HighlightCursorY, Mode=OneWay}"/>
+         </Rectangle.RenderTransform>
+      </Rectangle>
+
+      <!-- Hover coordinates and zoom readout, bottom right of the map. -->
+      <Canvas Width="160" Height="16" Background="{DynamicResource Background}" Grid.Row="1" Grid.Column="1"
+              HorizontalAlignment="Right" VerticalAlignment="Bottom" ZIndex="2">
+         <TextBlock Canvas.Left="20" Text="{Binding HoverPoint}" Background="{DynamicResource Background}" />
+         <TextBlock Canvas.Left="90" Text="{Binding ZoomLevel}" Background="{DynamicResource Background}" />
+      </Canvas>
+
+      <!-- Tile Panel -->
+      <Border Grid.Column="1" Grid.RowSpan="2" ZIndex="3" HorizontalAlignment="Left"
+              BorderBrush="{DynamicResource Backlight}" BorderThickness="1"
+              Background="{DynamicResource Background}"
+              Classes="slidePanel" Classes.shown="{Binding PrimaryMap.BlockEditor.ShowTiles}">
+         <DockPanel Name="TilePanel" Width="400" HorizontalAlignment="Right">
+            <Grid DockPanel.Dock="Top" DataContext="{Binding PrimaryMap.BlockEditor}">
+               <ToggleButton IsChecked="{Binding ShowTiles, Mode=TwoWay}" Width="20" Height="20" HorizontalAlignment="Right" Margin="1">
+                  <Path Data="{res:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+               </ToggleButton>
+               <local:AngleBorder HorizontalAlignment="Center" HorizontalContentAlignment="Center" Width="100" Content="Selected Block" Direction="Out" />
+            </Grid>
+            <Decorator IsVisible="{Binding BlockEditorVisible}" Margin="0,10" DockPanel.Dock="Top" Height="115">
+               <local:SelectedBlockEditor x:Name="BlockEditor" DataContext="{Binding PrimaryMap.BlockEditor}" HorizontalAlignment="Center" Width="300"/>
+            </Decorator>
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" HorizontalAlignment="Center" DataContext="{Binding PrimaryMap}">
+               <local:AngleButton Direction="Left" Width="90" Height="30" Margin="4" Command="{res:MethodCommand EditTileset}" CommandParameter="Primary">
+                  <StackPanel Orientation="Horizontal">
+                     <Path Data="{res:Icon Pencil}" Stretch="Uniform" Fill="{DynamicResource Primary}" Width="14" Height="14"/>
+                     <TextBlock Text="Primary" FontSize="11" />
+                  </StackPanel>
+               </local:AngleButton>
+               <local:AngleBorder HorizontalAlignment="Center" HorizontalContentAlignment="Center" Width="100" Content="Tiles" Direction="Out" />
+               <local:AngleButton Direction="Right" Width="90" Height="30" Margin="4" Command="{res:MethodCommand EditTileset}" CommandParameter="Secondary">
+                  <StackPanel Orientation="Horizontal">
+                     <Path Data="{res:Icon Pencil}" Stretch="Uniform" Fill="{DynamicResource Primary}" Width="14" Height="14"/>
+                     <TextBlock Text="Secondary" FontSize="11" />
+                  </StackPanel>
+               </local:AngleButton>
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Orientation="Horizontal" Margin="0,0,0,4" DataContext="{Binding PrimaryMap.BlockEditor}">
+               <TextBlock Text="Selected Tile:" VerticalAlignment="Center" Margin="5,0" Width="100" TextAlignment="Right" />
+               <StackPanel Margin="0,10,30,0" HorizontalAlignment="Left">
+                  <Border Padding="2" BorderBrush="{DynamicResource Secondary}" BorderThickness="1" VerticalAlignment="Center">
+                     <local:PixelImage DataContext="{Binding DrawTileRender}" TransparentBrush="{DynamicResource Background}" />
+                  </Border>
+                  <TextBlock HorizontalAlignment="Center" Text="{Binding DrawTileIndex}" />
+               </StackPanel>
+               <TextBlock VerticalAlignment="Center" Margin="5,0" TextAlignment="Center">
+                  <Run Text="Selected Palette:" /><LineBreak /><Run Text="(" /><Run Text="{Binding PaletteSelection, Mode=OneWay}" /><Run Text=")" />
+               </TextBlock>
+               <ComboBox ItemsSource="{Binding Palettes}" VerticalAlignment="Center"
+                         SelectedIndex="{Binding PaletteSelection, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+            </StackPanel>
+            <ScrollViewer Name="TileViewer" DataContext="{Binding PrimaryMap.BlockEditor}">
+               <Grid HorizontalAlignment="Center">
+                  <local:PixelImage Name="TileRenderImage" DataContext="{Binding TileRender}" />
+                  <!--
+                     Which tile is selected. This was missing entirely, so clicking a tile in the
+                     block editor gave no feedback at all. Same treatment as the block highlight:
+                     positioned by a TranslateTransform rather than Canvas coordinates, because the
+                     view model reports pixel offsets, and popped from 3x by the code-behind when
+                     TileSelectionToggle flips.
+                  -->
+                  <Rectangle Name="TileSelectionHighlight" IsHitTestVisible="False"
+                             HorizontalAlignment="Left" VerticalAlignment="Top"
+                             StrokeThickness="1" Opacity=".5" Width="24" Height="24"
+                             RenderTransformOrigin="50%,50%"
+                             Stroke="{DynamicResource Background}" Fill="{DynamicResource Primary}">
+                     <Rectangle.RenderTransform>
+                        <TransformGroup>
+                           <ScaleTransform />
+                           <TranslateTransform X="{Binding TileSelectionX}" Y="{Binding TileSelectionY}" />
+                        </TransformGroup>
+                     </Rectangle.RenderTransform>
+                  </Rectangle>
+               </Grid>
+            </ScrollViewer>
+         </DockPanel>
+      </Border>
+
+      <!-- Border Panel -->
+      <Border Grid.Column="1" Grid.RowSpan="2" ZIndex="3" HorizontalAlignment="Left"
+              BorderBrush="{DynamicResource Backlight}" BorderThickness="1"
+              Background="{DynamicResource Background}"
+              Classes="slidePanel" Classes.shown="{Binding PrimaryMap.BorderEditor.ShowBorderPanel}">
+         <DockPanel Width="400" HorizontalAlignment="Right">
+            <Grid DockPanel.Dock="Top" DataContext="{Binding PrimaryMap.BorderEditor}">
+               <ToggleButton Command="{res:MethodCommand ToggleBorderEditor}" Width="20" Height="20" HorizontalAlignment="Right" Margin="1">
+                  <Path Data="{res:Icon Exit}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+               </ToggleButton>
+               <local:AngleBorder Width="100" HorizontalAlignment="Center" Direction="Out" Content="Border Block" HorizontalContentAlignment="Center" Margin="0,0,0,5" />
+            </Grid>
+            <Grid DataContext="{Binding PrimaryMap.BorderEditor}" IsVisible="{Binding HasBorderDimensions}" DockPanel.Dock="Top" Margin="10"
+                  RowDefinitions="*,*" ColumnDefinitions="*,*">
+               <local:AngleBorder Content="Width:" Direction="Out" Margin="0,0,0,5" />
+               <local:AngleTextBox TextBinding="{Binding Width, Mode=TwoWay}" Grid.Column="1" Direction="Right" Margin="0,0,0,5" />
+               <local:AngleBorder Content="Height:" Direction="Out" Grid.Row="1" />
+               <local:AngleTextBox TextBinding="{Binding Height, Mode=TwoWay}" Grid.Row="1" Grid.Column="1" Direction="Right" />
+            </Grid>
+            <Decorator Width="200" Height="24" HorizontalAlignment="Center" DockPanel.Dock="Top"
+                       DataContext="{Binding PrimaryMap.MapRepointer}" ToolTip.Tip="{Binding RepointBorderText}">
+               <local:AngleButton Command="{Binding RepointBorderBlock}" Content="Repoint Border Block" Direction="Out" />
+            </Decorator>
+
+            <local:PixelImage x:Name="BorderImage" DataContext="{Binding PrimaryMap.BorderEditor.BorderRender}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+         </DockPanel>
+      </Border>
+
+      <!-- Tutorials Panel -->
+      <local:TutorialControl x:Name="TutorialsControl" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" DataContext="{Binding Tutorials}" EnterTutorial="OnEnterTutorial" />
+
+      <!--
+         Toolbar. Ported 1:1 from WPF, including the Wild Pokemon popup, the event-template
+         drag sources and the template settings popup. WPF's DataTrigger-per-value styles become
+         IsVisible bindings through the Equality converter, and its Hyperlink becomes a button
+         that hands the URL to the view model's own launcher.
+      -->
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Background="{DynamicResource Background}" Margin="1,0,1,5" ZIndex="2">
+         <StackPanel Margin="5,0" HorizontalAlignment="Center">
+            <Button Width="12" Height="12" Padding="1" Command="{res:MethodCommand Zoom}" CommandParameter="{x:Static map:ZoomDirection.Enlarge}" ToolTip.Tip="Zoom In">
+               <Path Stretch="Uniform" Fill="{DynamicResource Secondary}" Data="{res:Icon ThinPlus}" />
+            </Button>
+            <Button Width="12" Height="12" Padding="1" Command="{res:MethodCommand Zoom}" CommandParameter="{x:Static map:ZoomDirection.Shrink}" ToolTip.Tip="Zoom Out">
+               <Path Stretch="Uniform" Fill="{DynamicResource Secondary}" Data="{res:Icon ThinMinus}" />
+            </Button>
+         </StackPanel>
+         <local:AngleButton Direction="Left" Content="Edit Map Header" Command="{res:MethodCommand ToggleHeaderPanel}" Margin="0" x:Name="MapHeaderButton" />
+         <!-- WPF swapped the caption and tooltip with a DataTrigger on HasWildData. -->
+         <local:AngleButton Direction="Out" Width="110" x:Name="WildButton" IsChecked="{Binding PrimaryMap.WildPokemon.ShowWildData, Mode=TwoWay}"
+                            Classes.hasWildData="{Binding PrimaryMap.WildPokemon.HasWildData}" ToolTip.ShowDelay="0">
+            <Panel>
+               <TextBlock Text="Create Wild Data" IsVisible="{Binding !PrimaryMap.WildPokemon.HasWildData}" />
+               <TextBlock Text="Edit Wild Data" IsVisible="{Binding PrimaryMap.WildPokemon.HasWildData}"
+                          ToolTip.Tip="{Binding PrimaryMap.WildPokemon.WildSummary}" />
+            </Panel>
+         </local:AngleButton>
+         <Popup IsOpen="{Binding PrimaryMap.WildPokemon.ShowWildData, Mode=TwoWay}" PlacementTarget="{Binding #WildButton}" IsLightDismissEnabled="True">
+            <Border BorderThickness="1" BorderBrush="{DynamicResource Accent}">
+               <local:WildPokemonControl DataContext="{Binding PrimaryMap.WildPokemon}" />
+            </Border>
+         </Popup>
+         <local:AngleButton Direction="Right" Content="Edit Border Block" DataContext="{Binding PrimaryMap.BorderEditor}" Command="{res:MethodCommand ToggleBorderEditor}" Margin="0,0,5,0" x:Name="EditBorderButton" />
+         <Grid Width="24" Height="24" Name="WaveFunction" Background="Transparent"
+                 PointerPressed="EventTemplateDown" Margin="0,0,5,0" Tag="{x:Static map:EventCreationType.WaveFunction}" ToolTip.ShowDelay="0">
+            <ToolTip.Tip>
+               <TextBlock>
+                  <Run Text="Drop to auto-fill a region of identical blocks with random blocks."/>
+                  <LineBreak />
+                  <Run Text="Blocks will attempt to fill at a rate of 1000 per second, but will backtrack if it cannot find a valid fill."/>
+                  <LineBreak />
+                  <Run Text="Editing the map during auto-fill will cancel the auto-fill."/>
+               </TextBlock>
+            </ToolTip.Tip>
+            <Rectangle Fill="{DynamicResource Primary}" Margin="2" />
+            <Path Data="{res:Icon Dice}" Fill="{DynamicResource Secondary}" Stretch="Fill" />
+         </Grid>
+         <Border Width="24" Height="24" BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Background="{DynamicResource Secondary}" Name="ObjectEventTemplate"
+                 PointerPressed="EventTemplateDown" Margin="5,0,0,0" Tag="{x:Static map:EventCreationType.Object}" ToolTip.ShowDelay="0">
+            <ToolTip.Tip>
+               <TextBlock>
+                  <Run Text="Drag to Create New Object"/>
+                  <LineBreak />
+                  <Run Text="Click to choose a template"/>
+               </TextBlock>
+            </ToolTip.Tip>
+            <local:PixelImage DataContext="{Binding Templates.ObjectTemplateImage}" VerticalAlignment="Center" HorizontalAlignment="Center" TransparentBrush="{DynamicResource Secondary}"/>
+         </Border>
+         <ToggleButton Padding="0" Width="12" Height="12" VerticalAlignment="Top" Name="ShowTemplateSettingsButton" IsChecked="{Binding ShowTemplateSettings, Mode=TwoWay}">
+            <Path Data="{res:Icon Settings}" Fill="{DynamicResource Secondary}" Stretch="Uniform"/>
+         </ToggleButton>
+         <Popup DataContext="{Binding Templates}" IsOpen="{Binding #ShowTemplateSettingsButton.IsChecked, Mode=TwoWay}"
+                PlacementTarget="{Binding #ShowTemplateSettingsButton}" Width="235" Height="280" IsLightDismissEnabled="True">
+            <Border BorderBrush="{DynamicResource Secondary}" BorderThickness="1" Background="{DynamicResource Background}">
+               <Grid Margin="5" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                  <StackPanel>
+                     <local:AngleBorder Direction="Left">
+                        <TextBlock Text="Template:"/>
+                     </local:AngleBorder>
+                     <Panel IsVisible="{Binding SelectedTemplate, Converter={StaticResource Equality}, ConverterParameter=Item}">
+                        <local:AngleBorder Direction="Left" Margin="0,5">
+                           <TextBlock Text="Item:"/>
+                        </local:AngleBorder>
+                     </Panel>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                     <local:AngleComboBox Direction="Out" ItemsSource="{Binding AvailableTemplateTypes}" SelectedItem="{Binding SelectedTemplate, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+                     <Panel IsVisible="{Binding SelectedTemplate, Converter={StaticResource Equality}, ConverterParameter=Item}">
+                        <local:AngleComboBox Direction="Out" ItemsSource="{Binding ItemOptions}" SelectedIndex="{Binding ItemID, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" Margin="0,5" />
+                     </Panel>
+                  </StackPanel>
+                  <!-- Trainer template -->
+                  <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                              IsVisible="{Binding SelectedTemplate, Converter={StaticResource Equality}, ConverterParameter=Trainer}">
+                     <Button Classes="link" HorizontalAlignment="Right" Content="Help"
+                             Click="Navigate" Tag="https://github.com/haven1433/HexManiacAdvance/wiki/Trainer-Encounters" />
+                     <CheckBox Content="Use Existing Trainer Data" Margin="4,4,4,10" HorizontalAlignment="Center" IsChecked="{Binding UseExistingTrainer, Mode=TwoWay}" />
+                     <StackPanel IsVisible="{Binding !UseExistingTrainer}">
+                        <StackPanel Orientation="Horizontal">
+                           <TextBlock Text="This trainer prefers to use" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                           <local:AngleBorder Direction="Left">
+                              <TextBlock Margin="0,0,2,0" Text="level" />
+                           </local:AngleBorder>
+                           <local:AngleTextBox Width="35" Direction="Out" TextBinding="{Binding MaxLevel, Mode=TwoWay}" />
+                           <local:AngleComboBox Width="75" ItemsSource="{Binding TypeOptions}" SelectedIndex="{Binding PreferredType, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" Direction="Right" />
+                           <TextBlock Margin="2,0" Text="pokemon" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                           <TextBlock Margin="2,0" Text="from the first" />
+                           <local:AngleTextBox Width="35" Direction="Left" TextBinding="{Binding MaxPokedex, Mode=TwoWay}" />
+                           <local:AngleButton Width="60" Padding="0" Height="18" Direction="Out" IsChecked="{Binding UseNationalDex, Mode=TwoWay}">
+                              <Panel>
+                                 <TextBlock Text="Hoenn" IsVisible="{Binding !UseNationalDex}" />
+                                 <TextBlock Text="National" IsVisible="{Binding UseNationalDex}" />
+                              </Panel>
+                           </local:AngleButton>
+                           <TextBlock Margin="2,0" Text="pokemon." />
+                        </StackPanel>
+                     </StackPanel>
+                     <StackPanel IsVisible="{Binding UseExistingTrainer}">
+                        <local:AngleComboBox Direction="Out" DataContext="{Binding TrainerOptions}" />
+                     </StackPanel>
+                  </StackPanel>
+                  <!-- Legendary template -->
+                  <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                              IsVisible="{Binding SelectedTemplate, Converter={StaticResource Equality}, ConverterParameter=Legendary}">
+                     <Button Classes="link" HorizontalAlignment="Right" Content="Help"
+                             Click="Navigate" Tag="https://github.com/haven1433/HexManiacAdvance/wiki/Legendary-Pok%C3%A9mon-Encounters" />
+                  </StackPanel>
+                  <!--
+                     WPF moved this one Decorator between Grid.Row 1 and 2 depending on the
+                     template. Avalonia setters cannot change an attached Grid.Row per trigger, so
+                     the two placements are two elements, only one of which is ever visible.
+                  -->
+                  <Panel Grid.Row="1" Grid.ColumnSpan="2" Margin="5" HorizontalAlignment="Center" VerticalAlignment="Top"
+                         IsVisible="{Binding SelectedTemplate, Converter={x:Static res:MatchesAnyConverter.Instance}, ConverterParameter='NPC,Tutor,Trade'}">
+                     <local:AngleComboBox Direction="Out" MinWidth="50" ItemsSource="{Binding GraphicsOptions}" SelectedIndex="{Binding TrainerGraphics, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}">
+                        <local:AngleComboBox.ItemsPanel>
+                           <ItemsPanelTemplate><WrapPanel MaxWidth="256" /></ItemsPanelTemplate>
+                        </local:AngleComboBox.ItemsPanel>
+                     </local:AngleComboBox>
+                  </Panel>
+                  <Panel Grid.Row="2" Grid.ColumnSpan="2" Margin="5" HorizontalAlignment="Center" VerticalAlignment="Top"
+                         IsVisible="{Binding SelectedTemplate, Converter={x:Static res:MatchesAnyConverter.Instance}, ConverterParameter='Trainer,Legendary'}">
+                     <local:AngleComboBox Direction="Out" MinWidth="50" ItemsSource="{Binding GraphicsOptions}" SelectedIndex="{Binding TrainerGraphics, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}">
+                        <local:AngleComboBox.ItemsPanel>
+                           <ItemsPanelTemplate><WrapPanel MaxWidth="256" /></ItemsPanelTemplate>
+                        </local:AngleComboBox.ItemsPanel>
+                     </local:AngleComboBox>
+                  </Panel>
+                  <Panel Grid.Row="3" Grid.ColumnSpan="2" Margin="5" HorizontalAlignment="Center"
+                         IsVisible="{Binding SelectedTemplate, Converter={StaticResource Equality}, ConverterParameter=Trainer}">
+                     <local:PixelImage DataContext="{Binding TrainerSprite}" TransparentBrush="{DynamicResource Background}" />
+                  </Panel>
+                  <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0" ColumnDefinitions="*,*"
+                        IsVisible="{Binding SelectedTemplate, Converter={StaticResource Equality}, ConverterParameter=HMObject}">
+                     <local:AngleBorder Direction="Left" Content="Type:" />
+                     <local:AngleComboBox Grid.Column="1" Direction="Out" ItemsSource="{Binding HMObjectOptions}" SelectedIndex="{Binding HMObjectIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+                  </Grid>
+               </Grid>
+            </Border>
+         </Popup>
+         <StackPanel Name="OtherEventTemplates" Orientation="Horizontal">
+            <Border Width="24" Height="24" BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Background="{DynamicResource Accent}"
+                    PointerPressed="EventTemplateDown" Margin="5,0" Tag="{x:Static map:EventCreationType.Warp}"
+                    ToolTip.ShowDelay="0" ToolTip.Tip="Drag to Create New Warp">
+               <TextBlock Text="W" HorizontalAlignment="Center" VerticalAlignment="Center" FontStyle="Italic" />
+            </Border>
+            <Border Width="24" Height="24" BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Background="{DynamicResource Stream2}"
+                    PointerPressed="EventTemplateDown" Margin="5,0" Tag="{x:Static map:EventCreationType.Script}"
+                    ToolTip.ShowDelay="0" ToolTip.Tip="Drag to Create New Script">
+               <TextBlock Text="Sc" HorizontalAlignment="Center" VerticalAlignment="Center" FontStyle="Italic" />
+            </Border>
+            <Border Width="24" Height="24" BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Background="{DynamicResource Error}"
+                    PointerPressed="EventTemplateDown" Margin="5,0" Tag="{x:Static map:EventCreationType.Signpost}"
+                    ToolTip.ShowDelay="0" ToolTip.Tip="Drag to Create New Signpost (or hidden item)">
+               <TextBlock Text="Sp" HorizontalAlignment="Center" VerticalAlignment="Center" FontStyle="Italic" />
+            </Border>
+         </StackPanel>
+         <!-- A map can only hold one fly spot, so the tile dims and re-labels when it already has one. -->
+         <Border Width="24" Height="24" BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Background="{DynamicResource Text1}"
+                 PointerPressed="EventTemplateDown" Margin="5,0" Tag="{x:Static map:EventCreationType.Fly}"
+                 ToolTip.ShowDelay="0" Classes.noFlyEvent="{Binding !PrimaryMap.CanCreateFlyEvent}">
+            <ToolTip.Tip>
+               <Panel>
+                  <TextBlock Text="Drag to Create New Fly Spot" IsVisible="{Binding PrimaryMap.CanCreateFlyEvent}" />
+                  <TextBlock Text="Fly Events are limited to 1 per map name." IsVisible="{Binding !PrimaryMap.CanCreateFlyEvent}" />
+               </Panel>
+            </ToolTip.Tip>
+            <TextBlock Text="F" HorizontalAlignment="Center" VerticalAlignment="Center" FontStyle="Italic" />
+         </Border>
+         <local:AngleBorder Direction="Left" VerticalAlignment="Stretch" Content="Map ID:" />
+         <local:AngleBorder Direction="Out" VerticalAlignment="Stretch" Margin="0,0,5,0">
+            <Border Width="50">
+               <TextBlock Text="{Binding PrimaryMap.Name}" HorizontalAlignment="Center" />
+            </Border>
+         </local:AngleBorder>
+         <local:AngleBorder Direction="Left" VerticalAlignment="Stretch" Content="Quick Goto:" />
+         <local:AngleComboBox Height="18" Direction="Out" ItemsSource="{Binding PrimaryMap.SortedAvailableNames}"
+                              SelectedIndex="{Binding PrimaryMap.GotoNameIndex, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" />
+      </StackPanel>
+      <Border Grid.Column="1" IsHitTestVisible="False" BorderBrush="{DynamicResource Secondary}" Background="{DynamicResource Background}" BorderThickness="0,0,0,1" Height="5" VerticalAlignment="Bottom" />
+   </Grid>
+</UserControl>

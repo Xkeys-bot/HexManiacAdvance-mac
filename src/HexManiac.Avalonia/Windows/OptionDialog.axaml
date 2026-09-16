@@ -1,0 +1,63 @@
+<!-- Ported from HexManiac.WPF/Windows/OptionDialog.xaml. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:res="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.OptionDialog"
+        xmlns:hshmwpfc="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+        xmlns:hshmcvmt="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Tools;assembly=HexManiac.Core"
+        xmlns:images="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Images;assembly=HexManiac.Core"
+        Title="" Width="450" SizeToContent="Height" MaxHeight="800"
+        WindowStartupLocation="CenterOwner">
+   <DockPanel Background="{DynamicResource Background}">
+      <Button Content="Cancel" IsCancel="True" Margin="5" DockPanel.Dock="Bottom" HorizontalAlignment="Right" Click="CancelClicked"/>
+      <ItemsControl Name="Options" DockPanel.Dock="Bottom">
+         <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+               <WrapPanel HorizontalAlignment="Center"/>
+            </ItemsPanelTemplate>
+         </ItemsControl.ItemsPanel>
+         <ItemsControl.ItemTemplate>
+            <DataTemplate>
+               <Grid Margin="5">
+                  <Button Padding="5" ToolTip.Tip="{Binding Description}" Click="OptionClicked">
+                     <StackPanel>
+                        <Decorator IsVisible="{Binding HasVisual}">
+                           <hshmwpfc:PixelImage DataContext="{Binding Visual}" />
+                        </Decorator>
+                        <TextBlock TextAlignment="Center">
+                           <Run Text="{Binding Option}" FontSize="20" FontWeight="Bold"/><LineBreak/><Run Text="{Binding ShortDescription}" FontStyle="Italic" FontSize="10"/>
+                        </TextBlock>
+                     </StackPanel>
+                  </Button>
+               </Grid>
+            </DataTemplate>
+         </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <ItemsControl Name="AdditionalDetails" HorizontalAlignment="Center" DockPanel.Dock="Bottom">
+         <ItemsControl.ItemTemplate>
+            <DataTemplate>
+               <ItemsControl ItemsSource="{Binding}" HorizontalAlignment="Center">
+                  <ItemsControl.DataTemplates>
+                     <DataTemplate DataType="images:ReadonlyPixelViewModel">
+                        <hshmwpfc:PixelImage UseLayoutRounding="True" Margin="5"/>
+                     </DataTemplate>
+                     <DataTemplate DataType="hshmcvmt:FlagViewModel">
+                        <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSet}" Margin="10,5"/>
+                     </DataTemplate>
+                     <DataTemplate DataType="hshmcvmt:EnumViewModel">
+                        <ComboBox ItemsSource="{Binding Options}" SelectedIndex="{Binding Choice, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}"/>
+                     </DataTemplate>
+                  </ItemsControl.DataTemplates>
+                  <ItemsControl.ItemsPanel>
+                     <ItemsPanelTemplate>
+                        <WrapPanel />
+                     </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+               </ItemsControl>
+            </DataTemplate>
+         </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBox Name="Prompt" BorderThickness="0" Background="Transparent" IsReadOnly="True" HorizontalAlignment="Center" Margin="5" TextWrapping="Wrap"
+               ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+   </DockPanel>
+</Window>

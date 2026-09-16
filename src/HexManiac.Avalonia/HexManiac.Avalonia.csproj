@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>HavenSoft.HexManiac.AvaloniaUI</RootNamespace>
+    <AssemblyName>HexManiacAdvance</AssemblyName>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Reflection bindings while porting; switch to compiled bindings later for speed. -->
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <!--
+      Same as HexManiac.Core and HexManiac.WPF: take version info from SharedAssemblyInfo.cs
+      instead of generating it. src/Directory.Build.props derives the obj path from
+      $(Configuration), so "dotnet build -c Debug" and a bare "dotnet run" each get their own obj
+      tree, and a generated AssemblyInfo.cs left in the other one gets compiled a second time
+      (error CS0579). Not generating one avoids that, exactly as the other two projects do.
+    -->
+    <!-- The libretro video callback hands over a raw frame buffer, and AudioQueue hands over a
+         raw device buffer; both are converted with pointer loops in Emulation/. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)../SharedAssemblyInfo.cs" Link="SharedAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Bump to the latest Avalonia 11.x when you set this up. -->
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.3" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IndexedPng* live in HexManiac.WPF/Resources but are pure .NET (no WPF types), so the
+         Avalonia project links the same source files rather than forking a second copy. -->
+    <Compile Include="..\HexManiac.WPF\Resources\IndexedPng.cs" Link="Resources\IndexedPng.cs" />
+    <Compile Include="..\HexManiac.WPF\Resources\IndexedPngReader.cs" Link="Resources\IndexedPngReader.cs" />
+    <Compile Include="..\HexManiac.WPF\Resources\IndexedPngWriter.cs" Link="Resources\IndexedPngWriter.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HexManiac.Core\HexManiac.Core.csproj" />
+  </ItemGroup>
+  <!--
+    HexManiac.Core reads its reference data from a "resources" folder next to the executable
+    (Singletons.cs: "resources/armReference.txt", "resources/hma.py", ...). HexManiac.WPF builds
+    that folder in a PostBuildEvent written in cmd.exe batch, which can't run on macOS, so this
+    target does the same copying with MSBuild tasks instead.
+  -->
+  <ItemGroup>
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.Core/Models/Code/*.txt" />
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.Core/Models/Code/*.hma" />
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.Core/Models/Code/*.toml" />
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.Core/Models/Code/*.py" />
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.Core/ViewModels/QuickEditItems/hubol_dpe_cfru.ups" />
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.WPF/Resources/Yogia16.graphics.titlescreen.copyright.tilemap.png" />
+    <HmaResource Include="$(MSBuildThisFileDirectory)../HexManiac.WPF/Resources/Yogia16-dark.graphics.titlescreen.copyright.tilemap.png" />
+    <HmaScriptResource Include="$(MSBuildThisFileDirectory)../HexManiac.WPF/Scripts/**/*.*" />
+  </ItemGroup>
+
+  <Target Name="CopyHmaResources" AfterTargets="Build">
+    <Copy SourceFiles="@(HmaResource)" DestinationFolder="$(OutDir)resources" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(HmaScriptResource)" DestinationFolder="$(OutDir)resources/Scripts/%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    And again for publish. `dotnet publish` assembles PublishDir from the publish item lists, not by
+    copying OutDir, so a target that only runs AfterTargets="Build" leaves the published app without
+    its resources folder - and Singletons' constructor reads resources/hma.py before any window
+    exists, so the app dies on startup with a DirectoryNotFoundException and no UI to report it.
+    That is exactly what the first .app build did.
+  -->
+  <Target Name="CopyHmaResourcesToPublish" AfterTargets="Publish">
+    <Copy SourceFiles="@(HmaResource)" DestinationFolder="$(PublishDir)resources" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(HmaScriptResource)" DestinationFolder="$(PublishDir)resources/Scripts/%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

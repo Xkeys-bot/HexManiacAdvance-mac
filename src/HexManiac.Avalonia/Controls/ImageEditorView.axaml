@@ -1,0 +1,255 @@
+<!--
+   Ported from HexManiac.WPF/Controls/ImageEditorView.xaml.
+
+   * Window/UserControl InputBindings -> KeyBindings, with Ctrl reading as Cmd on macOS.
+   * The mouse handlers on ImageContainer become pointer handlers in code-behind, because
+     Avalonia has no MouseLeftButtonDown / MouseRightButtonDown routed events.
+   * PixelImage keeps WPF's RenderTransform (scale + translate); the DataTrigger that recoloured
+     a checked tool's icon becomes a style selector on the RadioButton's :checked pseudo-class.
+   * Visibility + BoolToVisibility -> IsVisible.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.ImageEditorView"
+             xmlns:hshmcvm="clr-namespace:HavenSoft.HexManiac.Core.ViewModels;assembly=HexManiac.Core"
+             xmlns:hshmwpfr="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+             xmlns:local="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+             Focusable="True">
+   <UserControl.Styles>
+      <Style Selector="RadioButton.tool Path">
+         <Setter Property="Fill" Value="{DynamicResource Primary}"/>
+         <Setter Property="Stretch" Value="Uniform"/>
+         <Setter Property="Width" Value="24"/>
+         <Setter Property="Height" Value="24"/>
+      </Style>
+      <Style Selector="RadioButton.tool:checked Path">
+         <Setter Property="Fill" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="RadioButton.tool">
+         <Setter Property="Width" Value="30"/>
+         <Setter Property="Height" Value="30"/>
+         <Setter Property="HorizontalContentAlignment" Value="Center"/>
+         <Setter Property="VerticalContentAlignment" Value="Center"/>
+      </Style>
+      <Style Selector="Button.icon Path">
+         <Setter Property="Fill" Value="{DynamicResource Primary}"/>
+         <Setter Property="Stretch" Value="Uniform"/>
+         <Setter Property="Width" Value="24"/>
+         <Setter Property="Height" Value="24"/>
+      </Style>
+   </UserControl.Styles>
+
+   <DockPanel>
+      <DockPanel DockPanel.Dock="Left" Background="Transparent">
+         <Rectangle Width="1" DockPanel.Dock="Right" Fill="{DynamicResource Backlight}"/>
+
+         <ComboBox DockPanel.Dock="Top" HorizontalAlignment="Center"
+            ItemsSource="{Binding EditOptions}"
+            SelectedIndex="{Binding SelectedEditOption, Mode=TwoWay, Converter={x:Static hshmwpfr:IgnoreEmptySelectionConverter.Instance}}"
+            IsVisible="{Binding HasMultipleEditOptions}">
+            <ComboBox.ItemTemplate>
+               <DataTemplate><local:PixelImage/></DataTemplate>
+            </ComboBox.ItemTemplate>
+         </ComboBox>
+
+         <Slider DockPanel.Dock="Top" Margin="5"
+            IsVisible="{Binding CanEditTilesetWidth}"
+            Minimum="{Binding MinimumTilesetWidth}"
+            Maximum="{Binding MaximumTilesetWidth}"
+            Value="{Binding CurrentTilesetWidth, Mode=TwoWay}"
+            ToolTip.Tip="Adjust the displayed width of the tileset."/>
+
+         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" HorizontalAlignment="Center">
+            <Button Classes="icon" Command="{Binding Undo}" ToolTip.Tip="Undo (Cmd+Z)">
+               <Path Data="{hshmwpfr:Icon UndoArrow}"/>
+            </Button>
+            <Button Classes="icon" Command="{Binding Redo}" ToolTip.Tip="Redo (Cmd+Y)">
+               <Path Data="{hshmwpfr:Icon RedoArrow}"/>
+            </Button>
+            <StackPanel>
+               <Button Command="{Binding ZoomInCommand}" Width="30" Height="15" ToolTip.Tip="(+) Zoom In">
+                  <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Primary}">+</TextBlock>
+               </Button>
+               <Button Command="{Binding ZoomOutCommand}" Width="30" Height="15" ToolTip.Tip="(-) Zoom Out">
+                  <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Primary}">-</TextBlock>
+               </Button>
+            </StackPanel>
+         </StackPanel>
+
+         <!-- Tool selection -->
+         <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+               <RadioButton Classes="tool" GroupName="Tool" Command="{Binding SelectTool}" CommandParameter="{x:Static hshmcvm:ImageEditorTools.Pan}" ToolTip.Tip="(A) Pan">
+                  <Path Data="{hshmwpfr:Icon Hand}"/>
+               </RadioButton>
+               <RadioButton Classes="tool" GroupName="Tool" Command="{Binding SelectTool}" CommandParameter="{x:Static hshmcvm:ImageEditorTools.Select}" ToolTip.Tip="(S) Select">
+                  <Path Data="{hshmwpfr:Icon Selection}"/>
+               </RadioButton>
+               <RadioButton Classes="tool" GroupName="Tool" Command="{Binding SelectTool}" CommandParameter="{x:Static hshmcvm:ImageEditorTools.Draw}" ToolTip.Tip="(D) Draw">
+                  <Path Data="{hshmwpfr:Icon Pencil}"/>
+               </RadioButton>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+               <RadioButton Classes="tool" GroupName="Tool" Command="{Binding SelectTool}" CommandParameter="{x:Static hshmcvm:ImageEditorTools.Fill}" ToolTip.Tip="(F) Fill">
+                  <Path Data="{hshmwpfr:Icon Fill}"/>
+               </RadioButton>
+               <RadioButton Classes="tool" GroupName="Tool" Command="{Binding SelectTool}" CommandParameter="{x:Static hshmcvm:ImageEditorTools.EyeDropper}" ToolTip.Tip="(G) Eye Dropper">
+                  <Path Data="{hshmwpfr:Icon EyeDropper}"/>
+               </RadioButton>
+               <RadioButton Classes="tool" GroupName="Tool" Command="{Binding SelectTool}" CommandParameter="{x:Static hshmcvm:ImageEditorTools.TilePalette}" ToolTip.Tip="(H) Tile Palette"
+                            IsVisible="{Binding CanEditTilePalettes}">
+                  <Path Data="{hshmwpfr:Icon Palette}"/>
+               </RadioButton>
+            </StackPanel>
+         </StackPanel>
+
+            <!--
+               Per-tool options. WPF showed each row with a DataTrigger on SelectedTool (bounced
+               through the element's own Tag for the multi-value cases); here each row binds
+               IsVisible through the equality converter, and the "Draw or EyeDropper" row uses the
+               MatchesAny converter because a binding has no "or".
+            -->
+            <StackPanel Height="30" HorizontalAlignment="Center">
+               <!-- Cursor size: draw and eyedropper -->
+               <StackPanel Orientation="Horizontal"
+                     IsVisible="{Binding SelectedTool, Converter={x:Static hshmwpfr:MatchesAnyConverter.Instance}, ConverterParameter='Draw,EyeDropper'}">
+                  <RadioButton Classes="tool" GroupName="CursorSize" Command="{Binding SetCursorSize}" CommandParameter="1" Content="1"
+                     IsChecked="{Binding CursorSize, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=1}">
+                     <ToolTip.Tip>
+                        <TextBlock><Run Text="1 pixel cursor "/><Italic Foreground="{DynamicResource Secondary}"><Run Text="(Shift+1)"/></Italic></TextBlock>
+                     </ToolTip.Tip>
+                  </RadioButton>
+                  <RadioButton Classes="tool" GroupName="CursorSize" Command="{Binding SetCursorSize}" CommandParameter="2" Content="2"
+                     IsChecked="{Binding CursorSize, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=2}">
+                     <ToolTip.Tip>
+                        <TextBlock><Run Text="2 pixel cursor "/><Italic Foreground="{DynamicResource Secondary}"><Run Text="(Shift+2)"/></Italic></TextBlock>
+                     </ToolTip.Tip>
+                  </RadioButton>
+                  <RadioButton Classes="tool" GroupName="CursorSize" Command="{Binding SetCursorSize}" CommandParameter="4" Content="4"
+                     IsChecked="{Binding CursorSize, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=4}">
+                     <ToolTip.Tip>
+                        <TextBlock><Run Text="4 pixel cursor "/><Italic Foreground="{DynamicResource Secondary}"><Run Text="(Shift+3)"/></Italic></TextBlock>
+                     </ToolTip.Tip>
+                  </RadioButton>
+                  <RadioButton Classes="tool" GroupName="CursorSize" Command="{Binding SetCursorSize}" CommandParameter="8" Content="8" Margin="0,0,30,0"
+                     IsChecked="{Binding CursorSize, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=8}">
+                     <ToolTip.Tip>
+                        <TextBlock><Run Text="8 pixel cursor "/><Italic Foreground="{DynamicResource Secondary}"><Run Text="(Shift+4)"/></Italic></TextBlock>
+                     </ToolTip.Tip>
+                  </RadioButton>
+               </StackPanel>
+
+               <!-- Tile palette mode -->
+               <StackPanel Orientation="Horizontal"
+                     IsVisible="{Binding SelectedTool, Converter={StaticResource EqualityCheck}, ConverterParameter=TilePalette}">
+                  <RadioButton Classes="tool" GroupName="TilePaletteMode" Command="{Binding SelectTilePaletteMode}"
+                     CommandParameter="{x:Static hshmcvm:TilePaletteMode.Draw}"
+                     IsChecked="{Binding TilePaletteMode, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=Draw}">
+                     <Path Data="{hshmwpfr:Icon Pencil}"/>
+                  </RadioButton>
+                  <RadioButton Classes="tool" GroupName="TilePaletteMode" Command="{Binding SelectTilePaletteMode}"
+                     CommandParameter="{x:Static hshmcvm:TilePaletteMode.Fill}"
+                     IsChecked="{Binding TilePaletteMode, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=Fill}">
+                     <Path Data="{hshmwpfr:Icon FillBucket}"/>
+                  </RadioButton>
+                  <RadioButton Classes="tool" GroupName="TilePaletteMode" Command="{Binding SelectTilePaletteMode}"
+                     CommandParameter="{x:Static hshmcvm:TilePaletteMode.EyeDropper}"
+                     IsChecked="{Binding TilePaletteMode, Mode=OneWay, Converter={StaticResource EqualityCheck}, ConverterParameter=EyeDropper}">
+                     <Path Data="{hshmwpfr:Icon EyeDropper}"/>
+                  </RadioButton>
+               </StackPanel>
+
+               <!-- Flip, only while the select tool is active -->
+               <StackPanel Orientation="Horizontal"
+                     IsVisible="{Binding SelectedTool, Converter={StaticResource EqualityCheck}, ConverterParameter=Select}">
+                  <Button Classes="icon" Width="30" Height="30" Padding="0" Command="{Binding FlipVertical}"
+                          ToolTip.Tip="Flip the currently selected pixels top-to-bottom.">
+                     <Path Data="{hshmwpfr:Icon ArrowsUpDown}"/>
+                  </Button>
+                  <Button Classes="icon" Width="30" Height="30" Padding="0" Command="{Binding FlipHorizontal}"
+                          ToolTip.Tip="Flip the currently selected pixels left-to-right.">
+                     <Path Data="{hshmwpfr:Icon ArrowsLeftRight}"/>
+                  </Button>
+               </StackPanel>
+            </StackPanel>
+
+            <!-- WPF used Visibility=Hidden here, so the preview keeps its space while disabled. -->
+            <local:PixelImage DataContext="{Binding BlockPreview}" IsVisible="{Binding Enabled}" />
+
+         <!-- Sprite / palette pages -->
+         <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding SpritePageOptions}" IsVisible="{Binding HasMultipleSpritePages}" HorizontalAlignment="Center">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+               <DataTemplate>
+                  <RadioButton GroupName="SpritePage" Content="{Binding Name}" IsChecked="{Binding Selected, Mode=TwoWay}" Margin="1"/>
+               </DataTemplate>
+            </ItemsControl.ItemTemplate>
+         </ItemsControl>
+         <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding PalettePageOptions}" IsVisible="{Binding HasMultiplePalettePages}" HorizontalAlignment="Center">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+               <DataTemplate>
+                  <RadioButton GroupName="PalettePage" Content="{Binding Name}" IsChecked="{Binding Selected, Mode=TwoWay}" Margin="1"/>
+               </DataTemplate>
+            </ItemsControl.ItemTemplate>
+         </ItemsControl>
+
+         <Expander DockPanel.Dock="Bottom" Header="Color Mixer" ExpandDirection="Down"
+                   ToolTip.Tip="An extra palette separate from the file. Copy colors to save colors between images.">
+            <local:PaletteControl x:Name="PaletteMixer" LoseKeyboardFocusCausesLoseMultiSelect="False" DataContext="{DynamicResource PaletteMixer}"/>
+         </Expander>
+
+         <local:PaletteControl x:Name="PaletteControl" LoseKeyboardFocusCausesLoseMultiSelect="False" DataContext="{Binding Palette}" VerticalAlignment="Center" />
+      </DockPanel>
+
+      <Grid Name="ImageContainer" Background="Transparent" ClipToBounds="True">
+         <!-- Wrapping the PixelImage in a canvas to prevent clipping -->
+         <Canvas VerticalAlignment="Center" HorizontalAlignment="Center"
+                 Width="{Binding #EditImage.Bounds.Width}" Height="{Binding #EditImage.Bounds.Height}">
+            <!-- WPF: LayoutTransform="{x:Null}" - this image scales with its RenderTransform below,
+                 so the scale must not also be applied to its layout size. -->
+            <local:PixelImage x:Name="EditImage" ScaleAffectsLayout="False" RenderTransformOrigin="50%,50%">
+               <local:PixelImage.RenderTransform>
+                  <TransformGroup>
+                     <ScaleTransform ScaleX="{Binding SpriteScale}" ScaleY="{Binding SpriteScale}"/>
+                     <TranslateTransform X="{Binding XOffset}" Y="{Binding YOffset}"/>
+                  </TransformGroup>
+               </local:PixelImage.RenderTransform>
+            </local:PixelImage>
+         </Canvas>
+         <!-- Wrapping the selection render in a canvas to prevent clipping -->
+         <Canvas IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Center"
+                 Width="{Binding #SelectionRender.Bounds.Width}" Height="{Binding #SelectionRender.Bounds.Height}">
+            <Grid VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"
+                  Width="{Binding #SelectionRender.Bounds.Width}" Height="{Binding #SelectionRender.Bounds.Height}"
+                  IsVisible="{Binding SelectedTool, Converter={StaticResource EqualityCheck}, ConverterParameter=TilePalette}">
+               <Grid.RenderTransform>
+                  <TranslateTransform X="{Binding XOffset}" Y="{Binding YOffset}"/>
+               </Grid.RenderTransform>
+               <Border Background="{DynamicResource Background}" Opacity=".5"/>
+               <ItemsControl ItemsSource="{Binding TilePalettes}" FontSize="{Binding FontSize}">
+                  <ItemsControl.ItemsPanel>
+                     <ItemsPanelTemplate>
+                        <UniformGrid Columns="{Binding TileWidth}" Rows="{Binding TileHeight}"/>
+                     </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                     <DataTemplate>
+                        <Border Background="{Binding Converter={StaticResource TilePaletteHueConverter}}">
+                           <TextBlock Text="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                     </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+               </ItemsControl>
+            </Grid>
+            <local:GridDecorator>
+               <local:GridDecorator.RenderTransform>
+                  <TranslateTransform X="{Binding XOffset}" Y="{Binding YOffset}"/>
+               </local:GridDecorator.RenderTransform>
+               <local:SelectionRender x:Name="SelectionRender" Stretch="None" />
+            </local:GridDecorator>
+         </Canvas>
+         <TextBlock Background="{DynamicResource Background}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Text="{Binding QuickInfo}" />
+      </Grid>
+   </DockPanel>
+</UserControl>

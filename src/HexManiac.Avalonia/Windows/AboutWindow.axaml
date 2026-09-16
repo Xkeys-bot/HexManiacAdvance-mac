@@ -1,0 +1,30 @@
+<!--
+   Ported from HexManiac.WPF/Windows/AboutWindow.xaml.
+   The WPF Hyperlink inline has no Avalonia equivalent, so the licence link is a styled button
+   that opens the URL the same way NativeProcess.Start did.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.AboutWindow"
+        Background="{DynamicResource Background}"
+        Title="About Hex Maniac Advance" Height="300" Width="400"
+        WindowStartupLocation="CenterOwner">
+   <Border Background="{StaticResource HexBrush}">
+      <DockPanel Margin="15">
+         <TextBlock DockPanel.Dock="Bottom" FontStyle="Italic" TextWrapping="Wrap">
+            Hex Maniac Advance is a non-profit open-source fan-made tool.
+            Only use it with legally purchased software.
+            Pokemon is the property of Nintendo and GameFreak.
+            Please support the official release.
+         </TextBlock>
+         <TextBlock DockPanel.Dock="Top" VerticalAlignment="Center" FontWeight="Bold" Text="Hex Maniac Advance" FontSize="20"/>
+         <Image Source="avares://HexManiacAdvance/Assets/AppImage.png" DockPanel.Dock="Left" Width="200"/>
+         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Name="Version"/>
+            <TextBlock Name="Usage" TextWrapping="Wrap"/>
+            <Button Name="LicenseLink" Background="Transparent" BorderThickness="0" Padding="0" Click="Navigate"
+                    Content="MIT License" Foreground="{DynamicResource Accent}" Cursor="Hand"/>
+         </StackPanel>
+      </DockPanel>
+   </Border>
+</Window>

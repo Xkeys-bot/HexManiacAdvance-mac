@@ -1,0 +1,46 @@
+<!--
+   Ported from HexManiac.WPF/Controls/DexReorderView.xaml.
+   The two DataTriggers become bound style classes: "selected" for the accent border, and
+   "filtered" for the fade, whose WPF Enter/ExitActions storyboards become an Opacity transition.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.DexReorderView"
+             xmlns:hshmwpfc="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls">
+   <UserControl.Styles>
+      <Style Selector="Border.dexElement">
+         <Setter Property="BorderBrush" Value="Transparent"/>
+         <Setter Property="Opacity" Value="1"/>
+         <Setter Property="Transitions">
+            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+         </Setter>
+      </Style>
+      <Style Selector="Border.dexElement.selected">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="Border.dexElement.filtered">
+         <Setter Property="Opacity" Value="0.3"/>
+      </Style>
+   </UserControl.Styles>
+   <DockPanel>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" DockPanel.Dock="Top">
+         <TextBlock Text="Filter Name/Type:" VerticalAlignment="Center"/>
+         <TextBox Width="100" Margin="5" Text="{Binding Filter, Mode=TwoWay}"/>
+      </StackPanel>
+      <ScrollViewer Name="Scroller" Background="{DynamicResource Background}">
+         <ItemsControl Name="Container" ItemsSource="{Binding Elements}">
+            <ItemsControl.ItemsPanel>
+               <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+               <DataTemplate>
+                  <Border BorderThickness="2" Margin="-1" Name="PixelImage" ToolTip.Tip="{Binding Name}"
+                          Classes="dexElement" Classes.selected="{Binding Selected}" Classes.filtered="{Binding IsFilteredOut}">
+                     <hshmwpfc:PixelImage/>
+                  </Border>
+               </DataTemplate>
+            </ItemsControl.ItemTemplate>
+         </ItemsControl>
+      </ScrollViewer>
+   </DockPanel>
+</UserControl>

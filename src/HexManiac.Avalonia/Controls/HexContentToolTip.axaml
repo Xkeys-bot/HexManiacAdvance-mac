@@ -1,0 +1,35 @@
+<!--
+   Ported from HexManiac.WPF/Controls/HexContentToolTip.xaml.
+
+   WPF styled the string rows with a DataTrigger on TextStyleConverter. Avalonia has no
+   DataTrigger, so the "Reminder" case is carried as a style class bound from a converter
+   (Classes.reminder), with a matching selector below.
+-->
+<ToolTip xmlns="https://github.com/avaloniaui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+         x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.HexContentToolTip"
+         xmlns:hshmwpfc="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+         xmlns:images="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Images;assembly=HexManiac.Core"
+         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+         Background="{DynamicResource Background}">
+   <ItemsControl Name="ToolTipContent" ItemsSource="{Binding}">
+      <ItemsControl.Resources>
+         <hshmwpfc:IsReminderConverter x:Key="IsReminder" />
+      </ItemsControl.Resources>
+      <ItemsControl.Styles>
+         <Style Selector="TextBlock.reminder">
+            <Setter Property="Foreground" Value="{DynamicResource Secondary}" />
+            <Setter Property="FontStyle" Value="Italic" />
+         </Style>
+      </ItemsControl.Styles>
+      <ItemsControl.DataTemplates>
+         <DataTemplate DataType="images:ReadonlyPixelViewModel">
+            <hshmwpfc:PixelImage UseLayoutRounding="True" TransparentBrush="{DynamicResource Background}" />
+         </DataTemplate>
+         <DataTemplate DataType="sys:String">
+            <TextBlock Text="{Binding}" MaxWidth="400" TextWrapping="Wrap"
+                       Classes.reminder="{Binding Converter={StaticResource IsReminder}}" />
+         </DataTemplate>
+      </ItemsControl.DataTemplates>
+   </ItemsControl>
+</ToolTip>

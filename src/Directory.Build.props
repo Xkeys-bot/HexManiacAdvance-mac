@@ -1,4 +1,11 @@
 <Project>
+  <!-- Directory.Build.props is imported before Microsoft.Common.props defaults Configuration,
+       so a plain `dotnet build` (no -c) would expand $(Configuration) to the empty string and
+       write to artifacts/<proj>/bin/net8.0 instead of .../bin/Debug/net8.0. Default it here.
+       An explicit -c Debug/-c Release passes Configuration as a global property, which wins. -->
+  <PropertyGroup Condition="'$(Configuration)' == ''">
+    <Configuration>Debug</Configuration>
+  </PropertyGroup>
   <PropertyGroup>
     <OutputPath>$(SolutionDir)artifacts\$(MSBuildProjectName)\bin\$(Configuration)\</OutputPath>
     <BaseOutputPath>$(SolutionDir)artifacts\$(MSBuildProjectName)\bin\$(Configuration)\</BaseOutputPath>

@@ -1,0 +1,75 @@
+<!--
+   Ported from HexManiac.WPF/Controls/CommonTableStreamControl.xaml.
+   WPF's Visibility + BoolToVisibility converter becomes Avalonia's IsVisible; the inverse case
+   uses BoolConverters.Not instead of a BooleanConverter configured with Collapsed/Visible.
+   ToolTip content becomes the ToolTip.Tip attached property.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.CommonTableStreamControl"
+             xmlns:hmc="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls">
+   <StackPanel>
+      <DockPanel IsVisible="{Binding CanRepoint}">
+
+         <Grid DockPanel.Dock="Right">
+            <hmc:AngleButton Content="Repoint this one" Command="{Binding Repoint}" Direction="Right"
+                  IsVisible="{Binding CanRepointAll, Converter={x:Static BoolConverters.Not}}">
+               <ToolTip.Tip>
+                  <TextBlock TextAlignment="Left">
+                     Make a copy of the data and<LineBreak/>
+                     change this pointer to reference it.<LineBreak/>
+                     Other pointers will remain unchanged.
+                  </TextBlock>
+               </ToolTip.Tip>
+            </hmc:AngleButton>
+            <Menu IsVisible="{Binding CanRepointAll}" Background="{DynamicResource Background}" BorderThickness="1">
+               <Menu.Styles>
+                  <Style Selector="Menu:pointerover">
+                     <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                  </Style>
+               </Menu.Styles>
+               <hmc:AngleMenuItem Header="Repoint" Margin="0,1,0,0" Background="{DynamicResource Backlight}" Direction="Right">
+                  <MenuItem Header="This One" Command="{Binding Repoint}">
+                     <ToolTip.Tip>
+                        <TextBlock TextAlignment="Left">
+                           Make a copy of the data and<LineBreak/>
+                           change this pointer to reference it.<LineBreak/>
+                           Other pointers will remain unchanged.
+                        </TextBlock>
+                     </ToolTip.Tip>
+                  </MenuItem>
+                  <MenuItem Header="All" Command="{Binding RepointAll}">
+                     <ToolTip.Tip>
+                        <TextBlock TextAlignment="Left">
+                           Make several copies of the data and change<LineBreak/>
+                           each pointer to reference a different one.<LineBreak/>
+                           The earliest pointer will remain unchanged.
+                        </TextBlock>
+                     </ToolTip.Tip>
+                  </MenuItem>
+               </hmc:AngleMenuItem>
+            </Menu>
+         </Grid>
+
+         <StackPanel VerticalAlignment="Center">
+            <TextBlock Foreground="{DynamicResource Secondary}" FontStyle="Italic" TextWrapping="Wrap"
+               IsVisible="{Binding HasMultipleUses}">
+               <Run Text="This is used by"/><Run Foreground="{DynamicResource Accent}" Text="{Binding UsageCount, Mode=OneWay}"/><Run Text="pointers."/>
+            </TextBlock>
+            <TextBlock Foreground="{DynamicResource Secondary}" FontStyle="Italic" TextWrapping="Wrap"
+               IsVisible="{Binding DataIsValidButNoRun}">
+               Data conflict detected.
+            </TextBlock>
+         </StackPanel>
+      </DockPanel>
+      <hmc:AngleButton Content="Create new data" Command="{Binding CreateNew}" DockPanel.Dock="Right" Direction="Out"
+            IsVisible="{Binding CanCreateNew}">
+         <ToolTip.Tip>
+            <TextBlock TextAlignment="Left">
+               Create new data in free space that<LineBreak/>
+               matches the expected format.
+            </TextBlock>
+         </ToolTip.Tip>
+      </hmc:AngleButton>
+   </StackPanel>
+</UserControl>

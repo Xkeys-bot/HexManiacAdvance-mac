@@ -1,0 +1,42 @@
+<!--
+   Ported from HexManiac.WPF/Controls/AutocompleteOverlay.xaml.
+   The DataTrigger that opened the popup when the overlay became visible is replaced by binding
+   Popup.IsOpen to the overlay's IsVisible, and the per-item selected-border DataTrigger becomes
+   a bound style class.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.AutocompleteOverlay"
+             Margin="5,0,0,0"
+             HorizontalAlignment="Left"
+             VerticalAlignment="Top"
+             IsTabStop="False"
+             IsVisible="False">
+   <UserControl.Styles>
+      <Style Selector="Button.completion">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="HorizontalAlignment" Value="Stretch"/>
+         <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      </Style>
+      <Style Selector="Button.completion.selected">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+   </UserControl.Styles>
+   <Canvas Width="0" Height="0" ClipToBounds="False">
+      <Popup Name="Popup" IsLightDismissEnabled="False"
+             IsOpen="{Binding $parent[UserControl].IsVisible, Mode=OneWay}">
+         <Border Name="ScrollBorder" Padding="1" BorderThickness="1" BorderBrush="{DynamicResource Accent}" Background="{DynamicResource Background}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="200">
+               <ItemsControl Name="AutocompleteItems">
+                  <ItemsControl.ItemTemplate>
+                     <DataTemplate>
+                        <Button Classes="completion" Classes.selected="{Binding IsSelected}"
+                                Content="{Binding DisplayText}" Click="AutocompleteOptionChosen"/>
+                     </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+               </ItemsControl>
+            </ScrollViewer>
+         </Border>
+      </Popup>
+   </Canvas>
+</UserControl>

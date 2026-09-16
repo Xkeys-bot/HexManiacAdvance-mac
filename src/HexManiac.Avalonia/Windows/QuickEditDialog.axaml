@@ -1,0 +1,23 @@
+<!--
+   The confirmation window for a quick edit. WPF built this Window in code inside
+   CreateQuickEditCommand; the port declares it, because the markup says what it is far more
+   clearly than twenty lines of object initialisers.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.QuickEditDialog"
+        Width="300" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Background}">
+   <StackPanel>
+      <TextBlock Name="DescriptionText" Margin="5" FontSize="14" TextWrapping="Wrap"
+                 Foreground="{DynamicResource Primary}" />
+      <Button Name="WikiLink" HorizontalAlignment="Center" Background="Transparent" BorderThickness="0"
+              Click="OpenWiki" Content="Click here to learn more."
+              Foreground="{DynamicResource Accent}" IsVisible="False" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+         <Button Content="Run" Margin="5" Click="RunEdit" />
+         <Button Content="Cancel" Margin="5" IsCancel="True" Click="CancelEdit" />
+      </StackPanel>
+   </StackPanel>
+</Window>

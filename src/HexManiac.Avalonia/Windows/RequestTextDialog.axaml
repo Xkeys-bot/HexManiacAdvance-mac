@@ -1,0 +1,19 @@
+<!--
+   Ported from HexManiac.WPF/Windows/RequestTextDialog.xaml.
+   WPF routed OK through ApplicationCommands.NextPage and a CommandBinding; Avalonia has no
+   routed commands, so the button and the Enter key both call the handler directly.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.RequestTextDialog"
+        Title="" Width="450" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner">
+   <DockPanel Background="{DynamicResource Background}">
+      <StackPanel DockPanel.Dock="Bottom" HorizontalAlignment="Right" Orientation="Horizontal">
+         <Button Content="OK" Margin="5" IsDefault="True" Click="AcceptText"/>
+         <Button Content="Cancel" IsCancel="True" Margin="5" Click="CancelText"/>
+      </StackPanel>
+      <TextBlock Name="Prompt" HorizontalAlignment="Center" Margin="5" DockPanel.Dock="Top"/>
+      <TextBox Name="TextBox" Margin="5"/>
+   </DockPanel>
+</Window>

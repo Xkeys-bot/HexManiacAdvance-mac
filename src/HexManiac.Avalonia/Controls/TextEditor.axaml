@@ -1,0 +1,32 @@
+<!--
+   Ported from HexManiac.WPF/Controls/TextEditor.xaml.
+
+   Same trick as WPF: a transparent TextBox sits on top of several coloured TextBlock layers, so
+   the caret and selection are real while the syntax colouring is just painted underneath. The
+   layers' TranslateTransforms are created in code-behind (Avalonia's name generator only emits
+   fields for named controls, not for nested transforms), and scroll sync hooks the TextBox's
+   template ScrollViewer since Avalonia has no ScrollViewer.ScrollChanged attached event here.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.TextEditor"
+             xmlns:local="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls">
+   <Grid Name="Body" ClipToBounds="True" Background="Transparent">
+      <Canvas ClipToBounds="False" Width="0" HorizontalAlignment="Left" TextElement.FontFamily="Consolas">
+         <TextBlock Name="BasicLayer" Foreground="{DynamicResource Primary}" Margin="2" Text="{Binding PlainContent}"/>
+         <TextBlock Name="AccentLayer" Foreground="{DynamicResource Accent}" Margin="2" Text="{Binding AccentContent}"/>
+         <TextBlock Name="ConstantsLayer" Foreground="{DynamicResource Data1}" Margin="2" Text="{Binding ConstantContent}"/>
+         <TextBlock Name="TextLayer" Foreground="{DynamicResource Text1}" Margin="2" Text="{Binding TextContent}"/>
+         <TextBlock Name="NumericLayer" Foreground="{DynamicResource Data2}" Margin="2" Text="{Binding NumericContent}"/>
+         <TextBlock Name="CommentLayer" Foreground="{DynamicResource Secondary}" Margin="2"/>
+      </Canvas>
+      <TextBox Name="TransparentLayer" Background="Transparent" CaretBrush="{DynamicResource Primary}" Foreground="Transparent"
+               ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+               FontFamily="Consolas"
+               UndoLimit="0" AcceptsReturn="True" AcceptsTab="True"
+               Tag="{Binding $parent[local:TextEditor].Tag}"
+               ContextMenu="{Binding $parent[local:TextEditor].ContextMenuOverride}"
+               Text="{Binding Content, Mode=TwoWay}" />
+      <Rectangle Name="CornerCover" HorizontalAlignment="Right" VerticalAlignment="Bottom" Fill="{DynamicResource Background}" Margin="1" UseLayoutRounding="True" />
+   </Grid>
+</UserControl>

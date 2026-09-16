@@ -1,0 +1,87 @@
+<!--
+   Ported from HexManiac.WPF/Controls/SelectedBlockEditor.xaml.
+
+   The WPF file declares three Storyboards (AnimateToSplitView / BackView / FrontView) in the
+   template resources, but nothing ever starts them: the only handler that would
+   (WheelOverImage) has its body commented out upstream. They are dead and not reproduced.
+
+   Per-tile MouseEnter / MouseLeftButtonDown / MouseRightButtonDown become pointer handlers
+   attached in code-behind, since Avalonia raises a single PointerPressed.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.SelectedBlockEditor"
+             xmlns:local="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+             xmlns:res="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources">
+   <UserControl.Styles>
+      <Style Selector="local|PixelImage.tile">
+         <Setter Property="UseTrueTransparency" Value="True" />
+      </Style>
+      <Style Selector="Canvas > Button">
+         <Setter Property="BorderBrush" Value="Transparent" />
+         <Setter Property="BorderThickness" Value="1" />
+         <Setter Property="Background" Value="{DynamicResource Background}" />
+         <Setter Property="Padding" Value="0" />
+      </Style>
+      <Style Selector="Canvas > Button Path">
+         <Setter Property="Fill" Value="{DynamicResource Secondary}" />
+         <Setter Property="Stretch" Value="Fill" />
+      </Style>
+   </UserControl.Styles>
+   <Grid ColumnDefinitions="*,Auto">
+      <Grid VerticalAlignment="Center" ColumnDefinitions="*,*" RowDefinitions="*,*,*,*">
+         <local:AngleBorder Direction="Left" Content="Behavior:" Margin="0,0,-2,0" />
+         <local:AngleComboBox Direction="Out" Grid.Column="1" DataContext="{Binding BehaviorOptions}" Margin="2" />
+         <local:AngleBorder Direction="Left" Content="Layer:" Grid.Row="1" Margin="0,0,-2,0" />
+         <local:AngleComboBox Direction="Out" Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding Layer, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" ItemsSource="{Binding LayerOptions}" Margin="2" />
+
+         <local:AngleBorder Direction="Left" Content="Terrain:" Grid.Row="2" Margin="0,0,-2,0" IsVisible="{Binding HasTerrainAndEncounter}" />
+         <local:AngleComboBox Direction="Out" Grid.Row="2" Grid.Column="1" Margin="2"
+            SelectedIndex="{Binding Terrain, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" ItemsSource="{Binding TerrainOptions}" IsVisible="{Binding HasTerrainAndEncounter}" />
+         <local:AngleBorder Direction="Left" Content="Encounter:" Grid.Row="3" Margin="0,0,-2,0" IsVisible="{Binding HasTerrainAndEncounter}" />
+         <local:AngleComboBox Direction="Out" Grid.Row="3" Grid.Column="1" Margin="2"
+            SelectedIndex="{Binding Encounter, Mode=TwoWay, Converter={x:Static res:IgnoreEmptySelectionConverter.Instance}}" ItemsSource="{Binding EncounterOptions}" IsVisible="{Binding HasTerrainAndEncounter}" />
+      </Grid>
+
+      <Canvas Grid.Column="1" Name="TileCanvas" Width="96" Height="96" Margin="8" ClipToBounds="False" Background="{DynamicResource Background}">
+         <Viewbox Canvas.Bottom="95" Canvas.Left="-1" Stretch="Uniform" StretchDirection="DownOnly" Width="48" Height="12">
+            <local:AngleBorder Content="Foreground" Direction="Out" />
+         </Viewbox>
+         <Viewbox Canvas.Bottom="47" Canvas.Left="48" Stretch="Uniform" StretchDirection="DownOnly" Width="48" Height="12">
+            <local:AngleBorder Content="Background" Direction="Out" />
+         </Viewbox>
+
+         <Button Width="24" Canvas.Left="{Binding FlipHLeft}" Canvas.Top="{Binding FlipHTop}" Command="{res:MethodCommand FlipH}" IsVisible="{Binding FlipHVisible}">
+            <Path Data="{res:Icon ArrowsLeftRight}" />
+         </Button>
+         <Button Height="24" Canvas.Left="{Binding FlipVLeft}" Canvas.Top="{Binding FlipVTop}" Command="{res:MethodCommand FlipV}" IsVisible="{Binding FlipVVisible}">
+            <Path Data="{res:Icon ArrowsUpDown}" />
+         </Button>
+
+         <local:PixelImage Classes="tile" x:Name="LeftTopBack"      DataContext="{Binding LeftTopBack}"      Canvas.Top="48" Canvas.Left="48" />
+         <local:PixelImage Classes="tile" x:Name="LeftTopFront"     DataContext="{Binding LeftTopFront}"     Canvas.Top="0"  Canvas.Left="0"  />
+         <local:PixelImage Classes="tile" x:Name="RightTopBack"     DataContext="{Binding RightTopBack}"     Canvas.Top="48" Canvas.Left="72" />
+         <local:PixelImage Classes="tile" x:Name="RightTopFront"    DataContext="{Binding RightTopFront}"    Canvas.Top="0"  Canvas.Left="24" />
+         <local:PixelImage Classes="tile" x:Name="LeftBottomBack"   DataContext="{Binding LeftBottomBack}"   Canvas.Top="72" Canvas.Left="48" />
+         <local:PixelImage Classes="tile" x:Name="LeftBottomFront"  DataContext="{Binding LeftBottomFront}"  Canvas.Top="24" Canvas.Left="0"  />
+         <local:PixelImage Classes="tile" x:Name="RightBottomBack"  DataContext="{Binding RightBottomBack}"  Canvas.Top="72" Canvas.Left="72" />
+         <local:PixelImage Classes="tile" x:Name="RightBottomFront" DataContext="{Binding RightBottomFront}" Canvas.Top="24" Canvas.Left="24" />
+
+         <Button Width="16" Height="16" Command="{res:MethodCommand CopyForeground}" Canvas.Left="56" Canvas.Top="8" ToolTip.Tip="Copy Foreground Tiles">
+            <Path Data="{res:Icon Copy}" />
+         </Button>
+         <Button Width="16" Height="16" Command="{res:MethodCommand PasteForeground}" Canvas.Left="72" Canvas.Top="24" ToolTip.Tip="Paste Foreground Tiles">
+            <Path Data="{res:Icon Paste}" />
+         </Button>
+         <Button Width="16" Height="16" Command="{res:MethodCommand CopyBackground}" Canvas.Left="8" Canvas.Top="56" ToolTip.Tip="Copy Background Tiles">
+            <Path Data="{res:Icon Copy}" />
+         </Button>
+         <Button Width="16" Height="16" Command="{res:MethodCommand PasteBackground}" Canvas.Left="24" Canvas.Top="72" ToolTip.Tip="Paste Background Tiles">
+            <Path Data="{res:Icon Paste}" />
+         </Button>
+      </Canvas>
+
+      <TextBlock Grid.ColumnSpan="2" Height="20" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-15"
+                 Foreground="{DynamicResource Error}" Text="{Binding ErrorText}" IsVisible="{Binding HasError}" />
+   </Grid>
+</UserControl>

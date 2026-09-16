@@ -1,0 +1,87 @@
+<!--
+   The in-editor chat panel. No counterpart in HexManiac.WPF; it sits in the same right-hand dock
+   as the Python automation panel and talks to Claude through the same tool registry the MCP server
+   exposes, so anything an external client can do here, this can too.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ai="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Ai"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.ChatPanel"
+             Background="{DynamicResource Background}">
+   <UserControl.Styles>
+      <Style Selector="Border.bubble">
+         <Setter Property="Margin" Value="4,3"/>
+         <Setter Property="Padding" Value="7,5"/>
+         <Setter Property="CornerRadius" Value="4"/>
+      </Style>
+      <Style Selector="Border.user">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="Border.tool">
+         <Setter Property="Margin" Value="12,1,4,1"/>
+         <Setter Property="Padding" Value="6,2"/>
+      </Style>
+      <Style Selector="Border.bubble > SelectableTextBlock">
+         <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      </Style>
+      <Style Selector="Border.tool > SelectableTextBlock">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="FontFamily" Value="Consolas,Menlo,monospace"/>
+         <Setter Property="FontSize" Value="11"/>
+      </Style>
+      <Style Selector="Border.error > SelectableTextBlock">
+         <Setter Property="Foreground" Value="{DynamicResource Error}"/>
+      </Style>
+   </UserControl.Styles>
+
+   <DockPanel>
+
+      <!-- Header -->
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="4,4,4,2">
+         <ComboBox Name="ModelBox" MinWidth="150" HorizontalAlignment="Stretch"
+                   SelectionChanged="ModelChanged" ToolTip.Tip="Which Claude model answers."/>
+         <Button Grid.Column="1" Content="Clear" Click="ClearChat" Margin="4,0,0,0" Padding="8,2"
+                 ToolTip.Tip="Forget this conversation. Nothing in the ROM changes."/>
+      </Grid>
+
+      <!-- Setup notice, shown only when there is no API key -->
+      <Border Name="SetupPanel" DockPanel.Dock="Top" IsVisible="False" Margin="4,2"
+              BorderBrush="{DynamicResource Error}" BorderThickness="1" Padding="6">
+         <StackPanel Spacing="4">
+            <TextBlock Text="No assistant configured" FontWeight="Bold" Foreground="{DynamicResource Error}"/>
+            <TextBlock Name="SetupText" TextWrapping="Wrap" Foreground="{DynamicResource Secondary}"/>
+            <Button Content="Re-check" Click="ChooseBackend" Padding="8,2" HorizontalAlignment="Left"/>
+         </StackPanel>
+      </Border>
+
+      <!-- Input -->
+      <Grid DockPanel.Dock="Bottom" RowDefinitions="Auto,Auto" Margin="4,2,4,4">
+         <TextBox Name="InputBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" MaxHeight="150"
+                  Watermark="Ask about the ROM. Enter sends, Shift+Enter for a new line."/>
+         <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,3,0,0">
+            <TextBlock Name="StatusText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource Secondary}" FontSize="11"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+               <Button Name="StopButton" Content="Stop" Click="StopChat" Padding="8,2" IsVisible="False"/>
+               <Button Name="SendButton" Content="Send" Click="SendChat" Padding="12,2"/>
+            </StackPanel>
+         </Grid>
+      </Grid>
+
+      <!-- Transcript -->
+      <ScrollViewer Name="TranscriptScroller" VerticalScrollBarVisibility="Auto">
+         <ItemsControl Name="TranscriptList">
+            <ItemsControl.ItemTemplate>
+               <DataTemplate x:DataType="ai:ChatEntry">
+                  <Border Classes="bubble"
+                          Classes.user="{Binding Role, Converter={x:Static ai:ChatRoleConverter.IsUser}}"
+                          Classes.tool="{Binding Role, Converter={x:Static ai:ChatRoleConverter.IsTool}}"
+                          Classes.error="{Binding IsError}">
+                     <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                  </Border>
+               </DataTemplate>
+            </ItemsControl.ItemTemplate>
+         </ItemsControl>
+      </ScrollViewer>
+   </DockPanel>
+</UserControl>

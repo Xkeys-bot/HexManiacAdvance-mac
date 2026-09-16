@@ -1,0 +1,136 @@
+<!--
+   Ported from HexManiac.WPF/Controls/StartScreen.xaml.
+   WPF Hyperlink inlines have no Avalonia equivalent, so every link is a flat styled Button.
+   The GitHub "update available" pulse was a Storyboard on a Loaded EventTrigger; Avalonia
+   expresses that as a Style.Animations block on a style class.
+-->
+<Grid xmlns="https://github.com/avaloniaui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.StartScreen"
+      xmlns:hsv="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+      Background="{StaticResource HexBrush}">
+   <Grid.Styles>
+      <Style Selector="Button.link">
+         <Setter Property="Background" Value="Transparent"/>
+         <Setter Property="BorderThickness" Value="0"/>
+         <Setter Property="Padding" Value="0"/>
+         <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+         <Setter Property="Cursor" Value="Hand"/>
+      </Style>
+      <Style Selector="Border.card">
+         <Setter Property="BorderThickness" Value="1,0,0,1"/>
+         <Setter Property="Padding" Value="5"/>
+         <Setter Property="Margin" Value="5"/>
+         <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+         <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      </Style>
+      <Style Selector="Path.pulse">
+         <Style.Animations>
+            <Animation Duration="0:0:1" IterationCount="INFINITE" PlaybackDirection="Alternate">
+               <KeyFrame Cue="0%">
+                  <Setter Property="Opacity" Value="0.6"/>
+                  <Setter Property="ScaleTransform.ScaleX" Value="1"/>
+                  <Setter Property="ScaleTransform.ScaleY" Value="1"/>
+               </KeyFrame>
+               <KeyFrame Cue="100%">
+                  <Setter Property="Opacity" Value="1"/>
+                  <Setter Property="ScaleTransform.ScaleX" Value="1.2"/>
+                  <Setter Property="ScaleTransform.ScaleY" Value="1.2"/>
+               </KeyFrame>
+            </Animation>
+         </Style.Animations>
+      </Style>
+   </Grid.Styles>
+
+   <DockPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Button Classes="link" HorizontalAlignment="Center" Margin="5" DockPanel.Dock="Bottom"
+              Content="MIT License" Click="Navigate" Tag="https://github.com/haven1433/HexManiacAdvance/blob/master/LICENSE"/>
+      <TextBlock FontStyle="Italic" TextWrapping="Wrap" DockPanel.Dock="Bottom" Margin="40,5,40,0" MaxWidth="700">
+         Hex Maniac Advance is a non-profit open-source fan-made tool.
+         Only use it with legally purchased software.
+         Pokemon is the property of Nintendo and GameFreak.
+         Please support the official release.
+      </TextBlock>
+      <Border DockPanel.Dock="Bottom" BorderThickness="1" BorderBrush="{DynamicResource Secondary}" Margin="40,20,40,5" Height="1"/>
+
+      <Grid ColumnDefinitions="9*,10,9*" RowDefinitions="7*,10,3*">
+         <StackPanel Margin="40,0,0,0">
+            <TextBlock Foreground="{DynamicResource Primary}" HorizontalAlignment="Center" Text="Open Recent"/>
+            <ItemsControl ItemsSource="{Binding RecentFileViewModels}">
+               <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                     <StackPanel Orientation="Horizontal" Margin="0,4" ToolTip.Tip="{Binding LongName}">
+                        <Path Data="{hsv:Icon Open}" Stretch="Uniform" Width="20" Height="20" Fill="{DynamicResource Secondary}"/>
+                        <Button Classes="link" FontSize="18" Command="{Binding Open}" Content="{Binding ShortName}"/>
+                     </StackPanel>
+                  </DataTemplate>
+               </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="link" FontSize="19" Command="{Binding Open}" Content="Open File..."/>
+         </StackPanel>
+
+         <Border Grid.Row="2" BorderThickness="1" CornerRadius="4" BorderBrush="{DynamicResource Secondary}" Padding="5" Margin="40,0,0,0">
+            <Grid>
+               <Rectangle Fill="{DynamicResource Background}" Opacity=".6"/>
+               <StackPanel>
+                  <TextBlock Text="About" FontSize="20"/>
+                  <TextBlock LineHeight="16" Margin="10,4,0,0" TextWrapping="Wrap">
+                     <Run Text="Version"/><Run Text="{Binding Singletons.MetadataInfo.VersionNumber, Mode=OneWay}"/><LineBreak/><Run Name="Usage"/>
+                  </TextBlock>
+               </StackPanel>
+            </Grid>
+         </Border>
+
+         <Border Grid.Column="2" Grid.RowSpan="3" BorderThickness="1" CornerRadius="4" BorderBrush="{DynamicResource Secondary}" Padding="5" Margin="0,0,40,0">
+            <Grid>
+               <Rectangle Fill="{DynamicResource Background}" Opacity=".6"/>
+               <StackPanel VerticalAlignment="Center">
+                  <DockPanel IsVisible="{Binding IsNewVersionAvailable}">
+                     <Path Classes="pulse" Width="50" Height="50" Stretch="Uniform" Data="{hsv:Icon GitHub}"
+                           RenderTransformOrigin="50%,50%" Fill="{DynamicResource Secondary}">
+                        <Path.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1"/></Path.RenderTransform>
+                     </Path>
+                     <Button Classes="link" FontSize="20" Margin="10" VerticalAlignment="Center" Content="Update Available!"
+                             Click="Navigate" Tag="https://github.com/haven1433/HexManiacAdvance/releases"/>
+                  </DockPanel>
+
+                  <TextBlock Text="Help" FontSize="24"/>
+
+                  <DockPanel>
+                     <Path Width="30" Height="30" Stretch="Uniform" Data="{hsv:Icon Book}" Fill="{DynamicResource Secondary}"/>
+                     <Border Classes="card">
+                        <StackPanel>
+                           <Button Classes="link" FontSize="20" Content="Tutorials" Click="Navigate"
+                                   Tag="https://github.com/haven1433/HexManiacAdvance/wiki/Tutorials"/>
+                           <TextBlock TextWrapping="Wrap" Text="Learn how to edit trainers, pokemon, the title screen, and more."/>
+                        </StackPanel>
+                     </Border>
+                  </DockPanel>
+
+                  <DockPanel>
+                     <Path Width="30" Height="30" Stretch="Uniform" Data="{hsv:Icon Help}" Fill="{DynamicResource Secondary}"/>
+                     <Border Classes="card">
+                        <StackPanel>
+                           <Button Classes="link" FontSize="20" Content="Wiki" Click="Navigate"
+                                   Tag="https://github.com/haven1433/HexManiacAdvance/wiki"/>
+                           <TextBlock TextWrapping="Wrap" Text="Access documentation to learn advanced features."/>
+                        </StackPanel>
+                     </Border>
+                  </DockPanel>
+
+                  <DockPanel>
+                     <Path Width="30" Height="30" Stretch="Uniform" Data="{hsv:Icon Discord}" Fill="{DynamicResource Secondary}"/>
+                     <Border Classes="card">
+                        <StackPanel>
+                           <Button Classes="link" FontSize="20" Content="Discord" Click="Navigate"
+                                   Tag="https://discord.gg/x9eQuBg"/>
+                           <TextBlock TextWrapping="Wrap" Text="Join the community to learn from other users and get access to new releases."/>
+                        </StackPanel>
+                     </Border>
+                  </DockPanel>
+               </StackPanel>
+            </Grid>
+         </Border>
+      </Grid>
+   </DockPanel>
+</Grid>

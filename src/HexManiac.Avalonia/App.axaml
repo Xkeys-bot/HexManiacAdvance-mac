@@ -1,0 +1,90 @@
+<!--
+   Ported from HexManiac.WPF/Windows/App.xaml.
+
+   WPF merged DesignerThemeResource (a stub so the designer has theme brushes) and
+   GeneralResources.xaml into Application.Resources. Avalonia does the same, plus Icons.axaml
+   (WPF reached the icons through an <hsv:Icons x:Key="Icons"/> entry inside GeneralResources)
+   The DataTemplates that WPF kept inside GeneralResources.xaml are inlined below instead,
+   because Avalonia resolves implicit (DataType-keyed) templates from Application.DataTemplates
+   rather than from a ResourceDictionary.
+-->
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hsv="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+             xmlns:hsc="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+             xmlns:tools="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Tools;assembly=HexManiac.Core"
+             xmlns:images="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Images;assembly=HexManiac.Core"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.App"
+             Name="HexManiacAdvance"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <ResourceDictionary>
+      <!--
+         WPF's default FontSize is 12 and HexManiac.WPF never overrides it, so every hard-coded
+         Width/Height/Margin in the ported XAML was laid out against 12pt text. Avalonia's Fluent
+         theme defaults to 14, which made control text ~17% wider and pushed overlapping
+         fixed-position content (the blocks panel header is the worst case) into each other.
+         Match WPF instead of re-tuning every measurement.
+      -->
+      <x:Double x:Key="ControlContentThemeFontSize">12</x:Double>
+      <x:Double x:Key="FontSizeNormal">12</x:Double>
+      <ResourceDictionary.MergedDictionaries>
+        <hsv:DesignerThemeResource/> <!-- Stub for Theme resources -->
+        <ResourceInclude Source="avares://HexManiacAdvance/Resources/Icons.axaml"/>
+        <ResourceInclude Source="avares://HexManiacAdvance/Resources/GeneralResources.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+  <!-- The DataTemplate section of HexManiac.WPF/Resources/GeneralResources.xaml. Avalonia
+       resolves implicit (DataType-keyed) templates from here, not from a ResourceDictionary. -->
+  <Application.DataTemplates>
+
+   <DataTemplate DataType="tools:ReadonlyPaletteCollection">
+      <StackPanel Orientation="Horizontal">
+         <TextBlock VerticalAlignment="Center" Margin="0,0,2,0" Text="{Binding Index}" IsVisible="{Binding DisplayIndex}" />
+         <ItemsControl ItemsSource="{Binding Colors}">
+            <ItemsControl.ItemsPanel>
+               <ItemsPanelTemplate>
+                  <UniformGrid Columns="{Binding ColorWidth}" Rows="{Binding ColorHeight}" HorizontalAlignment="Center"/>
+               </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+               <DataTemplate>
+                  <Rectangle Margin="1" Fill="{Binding Converter={StaticResource PaletteColorConverter}}" Width="14" Height="14"/>
+               </DataTemplate>
+            </ItemsControl.ItemTemplate>
+         </ItemsControl>
+      </StackPanel>
+   </DataTemplate>
+   <DataTemplate DataType="images:ReadonlyPixelViewModel">
+      <hsc:PixelImage />
+   </DataTemplate>
+   <DataTemplate DataType="images:CanvasPixelViewModel">
+      <hsc:PixelImage />
+   </DataTemplate>
+  </Application.DataTemplates>
+  <Application.Styles>
+    <FluentTheme />
+    <!--
+      ControlContentThemeFontSize covers templated controls; a bare TextBlock takes FontSize from
+      TextElement inheritance instead, so seed it at the window root. Matches WPF's default of 12.
+    -->
+    <Style Selector="Window">
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+    <!--
+      Top level menu items sit in a horizontal bar and drop their submenu below. In WPF these
+      were Style triggers on MenuItem.Role; here they need a "Menu > MenuItem" descendant
+      selector, which a ControlTheme may not contain (Avalonia throws when it builds the
+      resource), so they live in Application.Styles where that selector is legal. They are also
+      deliberately not a Menu.ItemContainerTheme: that would override the theme of a derived
+      item such as AngleMenuItem, which declares its own.
+    -->
+    <Style Selector="Menu &gt; MenuItem /template/ Popup#PART_Popup">
+      <Setter Property="Placement" Value="Bottom"/>
+    </Style>
+    <Style Selector="Menu &gt; MenuItem /template/ Path#SubmenuArrow">
+      <Setter Property="IsVisible" Value="False"/>
+    </Style>
+  </Application.Styles>
+</Application>

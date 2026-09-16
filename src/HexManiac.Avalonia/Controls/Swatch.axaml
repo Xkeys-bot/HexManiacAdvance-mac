@@ -1,0 +1,35 @@
+<!--
+   Ported from HexManiac.WPF/Controls/Swatch.xaml.
+   Mouse events become pointer events. WPF named the selector TranslateTransforms in XAML;
+   Avalonia's name generator only emits fields for named controls, so the two ellipses are named
+   instead and their transforms are created in code-behind.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.Swatch">
+   <DockPanel>
+      <Grid Width="30" DockPanel.Dock="Left" Name="HuePicker">
+         <Ellipse Name="HueSelectorEllipse" Stroke="Black" Width="10" Height="10" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,-5,0,0" IsHitTestVisible="False"/>
+      </Grid>
+      <Grid Name="SBPickerContainer">
+         <Rectangle>
+            <Rectangle.Fill>
+               <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                  <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                  <GradientStop Color="#00FFFFFF" Offset="1"/>
+               </LinearGradientBrush>
+            </Rectangle.Fill>
+         </Rectangle>
+         <Rectangle>
+            <Rectangle.Fill>
+               <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                  <GradientStop Color="#00000000" Offset="0"/>
+                  <GradientStop Color="#FF000000" Offset="1"/>
+               </LinearGradientBrush>
+            </Rectangle.Fill>
+         </Rectangle>
+         <Rectangle Name="SBPicker" Fill="Transparent"/>
+         <Ellipse Name="SBSelectorEllipse" Stroke="Black" Width="10" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-5,-5,0,0" IsHitTestVisible="False"/>
+      </Grid>
+   </DockPanel>
+</UserControl>

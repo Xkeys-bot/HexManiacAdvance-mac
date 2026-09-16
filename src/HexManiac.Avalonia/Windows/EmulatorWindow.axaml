@@ -1,0 +1,99 @@
+<!--
+   The embedded emulator. This has no counterpart in HexManiac.WPF, which only ever shelled the
+   ROM out to whatever program the OS associates with .gba (EditorViewModel.RunFile, F5). It is a
+   separate window rather than a tab because the tab list belongs to HexManiac.Core, and Core is
+   not modified by this port.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:emu="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Emulation"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.EmulatorWindow"
+        Title="Emulator" Width="960" Height="620" MinWidth="280" MinHeight="240"
+        Background="{DynamicResource Background}">
+   <DockPanel>
+
+      <!-- Toolbar -->
+      <Border DockPanel.Dock="Top" Background="{DynamicResource Background}" BorderThickness="0,0,0,1"
+              BorderBrush="{DynamicResource Backlight}" Padding="4">
+         <DockPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+               <!-- Icons.axaml has no transport glyphs and inventing two would not match the
+                    set's style, so this button says what it does. -->
+               <Button Name="PlayPauseButton" Click="TogglePlayPause" Content="Pause" MinWidth="64"
+                       Padding="8,0" Height="24" ToolTip.Tip="Pause / resume (Space)"/>
+               <Button Name="ResetButton" Click="ResetGame" Content="Reset" Padding="8,0" Height="24"
+                       ToolTip.Tip="Soft-reset the console. The ROM is not re-read."/>
+               <Button Name="ReloadButton" Click="ReloadRom" Content="Reload ROM" Padding="8,0" Height="24"
+                       ToolTip.Tip="Reboot on the ROM as it stands in the editor right now, including unsaved edits (Cmd+R)."/>
+               <Rectangle Width="1" Fill="{DynamicResource Backlight}" Margin="4,2"/>
+               <ComboBox Name="StateBox" MinWidth="120" Height="24" SelectionChanged="StateSelected"
+                         ToolTip.Tip="Named save states for this ROM, kept on disk. Play to a spot once, save it here, and every edit afterwards is one Reload away from being tested right there."/>
+               <Button Name="SaveStateButton" Click="SaveState" Content="Save" Padding="8,0" Height="24"
+                       ToolTip.Tip="Save the console's exact state under a name."/>
+               <Button Name="LoadStateButton" Click="LoadState" Content="Load" Padding="8,0" Height="24"
+                       IsEnabled="False" ToolTip.Tip="Jump back to the selected state."/>
+               <Button Name="DeleteStateButton" Click="DeleteState" Content="X" Padding="6,0" Height="24"
+                       IsEnabled="False" ToolTip.Tip="Delete the selected state."/>
+               <Button Name="MemoryButton" Content="Memory" Click="OpenMemoryViewer" Padding="8,0" Height="24"
+                       ToolTip.Tip="Watch the running game's RAM, and find which addresses change when something happens in game."/>
+               <Rectangle Width="1" Fill="{DynamicResource Backlight}" Margin="4,2"/>
+               <ComboBox Name="CoreBox" MinWidth="110" Height="24" SelectionChanged="CoreChanged"
+                         ToolTip.Tip="Which emulator core runs the ROM. mGBA is the most accurate and is the one where Reset works; VBA-M, VBA-Next and gpSP expose the 256KB of EWRAM that live memory inspection needs, but VBA-M keeps state across a restart, so Reset does nothing there - use a save state instead. Changing this takes effect next time the editor starts: two cores cannot share one process."/>
+               <Rectangle Width="1" Fill="{DynamicResource Backlight}" Margin="4,2"/>
+               <CheckBox Name="KeepPlaceBox" Content="Keep place" IsChecked="True" VerticalAlignment="Center"
+                         ToolTip.Tip="On Reload ROM, save the console's state and restore it afterwards, so you stay where you are instead of rebooting to the title screen. Falls back to a clean boot when the state no longer fits the edited ROM."/>
+               <CheckBox Name="IntegerScalingBox" Content="Sharp scale" IsChecked="True"
+                         IsCheckedChanged="IntegerScalingChanged" VerticalAlignment="Center"
+                         ToolTip.Tip="Scale by whole pixels only, so tiles stay square."/>
+            </StackPanel>
+            <TextBlock Name="StatusText" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                       VerticalAlignment="Center" Margin="8,0" Foreground="{DynamicResource Secondary}"/>
+         </DockPanel>
+      </Border>
+
+      <!-- Controls reminder -->
+      <Border DockPanel.Dock="Bottom" Background="{DynamicResource Background}" BorderThickness="0,1,0,0"
+              BorderBrush="{DynamicResource Backlight}" Padding="6,3">
+         <DockPanel>
+            <!-- Live readout of what the window received and what the console is being told. When
+                 input "does not work", this says which half is wrong without any guessing. -->
+            <TextBlock Name="InputMonitor" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                       Margin="12,0,0,0" Foreground="{DynamicResource Secondary}"
+                       ToolTip.Tip="Last key this window received, and the buttons the console is currently seeing."/>
+            <TextBlock Name="HelpText" Foreground="{DynamicResource Secondary}" TextWrapping="Wrap"
+                       Text="Arrows move &#x2022; Z = A &#x2022; X = B &#x2022; A = L &#x2022; S = R &#x2022; Enter = Start &#x2022; Backspace = Select &#x2022; Space pauses"/>
+         </DockPanel>
+      </Border>
+
+      <!-- No-core message, shown instead of the screen when nothing can be loaded -->
+      <Border Name="NoCorePanel" IsVisible="False" Padding="24" VerticalAlignment="Center">
+         <StackPanel Spacing="10" MaxWidth="460">
+            <TextBlock Text="No GBA core found" FontSize="16" HorizontalAlignment="Center"/>
+            <TextBlock Name="NoCoreDetail" TextWrapping="Wrap" Foreground="{DynamicResource Secondary}"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+               <Button Name="BrowseCoreButton" Content="Choose a core file..." Click="BrowseForCore" Padding="10,2"/>
+               <Button Name="CoreHelpButton" Content="Where do I get one?" Click="OpenCoreHelp" Padding="10,2"/>
+            </StackPanel>
+         </StackPanel>
+      </Border>
+
+      <Grid>
+         <emu:EmulatorScreen Name="Screen"/>
+
+         <!-- Shown over the picture whenever this window is not the active one. macOS sends key
+              events only to the front window, so an emulator sitting behind the editor (or behind
+              anything else) silently ignores every key - with no way to tell that apart from a
+              broken build. The same sentence lives in the status bar, but the status bar is the
+              first thing another window covers, so the one that matters goes on the screen itself.
+              Not hit-testable: the click that dismisses this belongs to the game. -->
+         <Border Name="InactiveOverlay" IsVisible="False" IsHitTestVisible="False" Background="#B0000000">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
+               <TextBlock Text="Click here to play" FontSize="20" Foreground="White"
+                          HorizontalAlignment="Center"/>
+               <TextBlock Text="The keyboard only reaches the window in front."
+                          Foreground="#CCFFFFFF" HorizontalAlignment="Center"/>
+            </StackPanel>
+         </Border>
+      </Grid>
+   </DockPanel>
+</Window>

@@ -1,0 +1,14 @@
+<!--
+   Ported from HexManiac.WPF/Controls/TextBoxLookAlike.xaml.
+   A Border that looks like a TextBox but hosts a TextBlock, so the tools tray can show hundreds
+   of fields without paying for hundreds of real TextBoxes (see AngleTextBox).
+-->
+<Border xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Controls.TextBoxLookAlike"
+        Background="{DynamicResource Backlight}"
+        BorderThickness="1,1,1,1"
+        UseLayoutRounding="True"
+        BorderBrush="{DynamicResource TopToBottomBrush}">
+   <TextBlock Name="ContentText" Margin="2,0,0,0" Text="{Binding Content}"/>
+</Border>

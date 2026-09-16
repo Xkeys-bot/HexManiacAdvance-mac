@@ -1,0 +1,48 @@
+<!--
+   Live view of the running game's memory. No WPF counterpart - this exists because the emulator is
+   in-process, so the editor can watch the ROM's effects and not just its contents.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HavenSoft.HexManiac.AvaloniaUI.Windows.MemoryViewerWindow"
+        Title="Live Memory" Width="620" Height="560" MinWidth="420" MinHeight="320"
+        Background="{DynamicResource Background}">
+   <DockPanel>
+
+      <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Backlight}" Padding="5">
+         <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Region:" VerticalAlignment="Center" Foreground="{DynamicResource Secondary}"/>
+            <ComboBox Name="RegionBox" MinWidth="110" SelectionChanged="RegionChanged"/>
+            <TextBlock Text="Address:" VerticalAlignment="Center" Foreground="{DynamicResource Secondary}"/>
+            <TextBox Name="AddressBox" Width="96" Watermark="0x02000000" KeyDown="AddressKeyDown"/>
+            <Button Content="Go" Click="GoToAddress" Padding="8,0"/>
+            <Rectangle Width="1" Fill="{DynamicResource Backlight}" Margin="2,2"/>
+            <CheckBox Name="LiveBox" Content="Live" IsChecked="True" VerticalAlignment="Center"
+                      ToolTip.Tip="Keep re-reading while the game runs. Bytes that changed since the last read are highlighted."/>
+         </StackPanel>
+      </Border>
+
+      <!-- Change finder: the reason to have this window at all -->
+      <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Backlight}" Padding="5">
+         <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6">
+               <Button Content="Snapshot" Click="TakeSnapshot" Padding="8,0"
+                       ToolTip.Tip="Remember this region as it is now. Then do something in game and press Compare to see exactly which addresses changed - this is how you find where a flag or variable lives."/>
+               <Button Content="Compare" Click="CompareSnapshot" Padding="8,0"/>
+               <Button Content="Clear" Click="ClearSnapshot" Padding="8,0"/>
+               <TextBlock Name="SnapshotStatus" VerticalAlignment="Center" FontSize="11"
+                          Foreground="{DynamicResource Secondary}"/>
+            </StackPanel>
+            <ScrollViewer Height="110" Margin="0,4,0,0">
+               <SelectableTextBlock Name="ChangeList" FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                    Foreground="{DynamicResource Primary}"/>
+            </ScrollViewer>
+         </DockPanel>
+      </Border>
+
+      <ScrollViewer>
+         <SelectableTextBlock Name="DumpText" Margin="6" FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                              Foreground="{DynamicResource Primary}"/>
+      </ScrollViewer>
+   </DockPanel>
+</Window>

@@ -1,0 +1,1075 @@
+<!--
+   Ported from HexManiac.WPF/Resources/GeneralResources.xaml.
+
+   Structural notes for the whole file:
+   * WPF `<Style TargetType="X">` with a Template setter becomes Avalonia `<ControlTheme
+     x:Key="{x:Type X}" TargetType="X">`, which is what makes it the implicit theme for that type.
+   * `ControlTemplate.Triggers` have no Avalonia equivalent. Property triggers become nested
+     `<Style Selector="^:pseudoclass">` rules: IsMouseOver -> :pointerover, IsEnabled=False ->
+     :disabled, IsChecked -> :checked, IsPressed -> :pressed, IsSelected -> :selected,
+     IsKeyboardFocused/IsKeyboardFocusWithin -> :focus / :focus-within.
+     Named parts inside a template are reached with `/template/ Type#Name`.
+   * WPF's Visibility is Avalonia's boolean IsVisible.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:hsc="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Controls"
+                    xmlns:hsv="clr-namespace:HavenSoft.HexManiac.AvaloniaUI.Resources"
+                    xmlns:tools="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Tools;assembly=HexManiac.Core"
+                    xmlns:images="clr-namespace:HavenSoft.HexManiac.Core.ViewModels.Images;assembly=HexManiac.Core">
+
+   <hsc:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+   <hsc:PaletteColorConverter x:Key="PaletteColorConverter"/>
+   <hsc:TilePaletteHueConverter x:Key="TilePaletteHueConverter"/>
+   <hsc:EqualityToBooleanConverter x:Key="EqualityCheck"/>
+   <hsv:FindToggleBrushConverter x:Key="FindToggleBrush"/>
+
+   <DrawingBrush x:Key="HexBrush" TileMode="FlipX" DestinationRect="0,0,33,38">
+      <DrawingBrush.Drawing>
+         <GeometryDrawing Geometry="{hsv:Icon LargeHexGrid}">
+            <GeometryDrawing.Pen>
+               <Pen Brush="{DynamicResource Backlight}" Thickness="1"/>
+            </GeometryDrawing.Pen>
+         </GeometryDrawing>
+      </DrawingBrush.Drawing>
+   </DrawingBrush>
+
+   <LinearGradientBrush EndPoint="0%,100%" StartPoint="0%,0%" x:Key="TopToBottomBrush">
+      <GradientStop Offset="0" Color="{DynamicResource BackgroundColor}"/>
+      <GradientStop Offset=".5" Color="{DynamicResource BackgroundColor}"/>
+      <GradientStop Offset=".5" Color="{DynamicResource SecondaryColor}"/>
+      <GradientStop Offset="1" Color="{DynamicResource SecondaryColor}"/>
+   </LinearGradientBrush>
+
+   <!-- Button Style -->
+   <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
+      <Setter Property="Padding" Value="3"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="Button">
+            <Border Name="Border"
+                  Padding="{TemplateBinding Padding}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  Background="{TemplateBinding Background}">
+               <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Border">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+   </ControlTheme>
+
+   <ControlTheme x:Key="{x:Type ToggleButton}" TargetType="ToggleButton">
+      <Setter Property="BorderBrush" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ToggleButton">
+            <Border Name="Border"
+                  Padding="{TemplateBinding Padding}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  Background="{TemplateBinding Background}">
+               <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#Border">
+         <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+      </Style>
+      <Style Selector="^:not(:checked)">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#Border">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+      </Style>
+   </ControlTheme>
+
+   <ControlTheme x:Key="{x:Type RepeatButton}" TargetType="RepeatButton">
+      <Setter Property="Padding" Value="3"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="RepeatButton">
+            <Border Name="Border"
+                  Padding="{TemplateBinding Padding}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  Background="{TemplateBinding Background}">
+               <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Border">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- ToolTip Style -->
+   <ControlTheme x:Key="{x:Type ToolTip}" TargetType="ToolTip">
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Padding" Value="4,2"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ToolTip">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+               <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+   </ControlTheme>
+
+   <!-- TextBlock Style -->
+   <ControlTheme x:Key="{x:Type TextBlock}" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Style Selector="^:disabled">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="FontStyle" Value="Italic"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- TextBox Style -->
+   <ControlTheme x:Key="{x:Type TextBox}" TargetType="TextBox">
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Primary}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource TopToBottomBrush}"/>
+      <Setter Property="BorderThickness" Value="1,1,1,1"/>
+      <Setter Property="MinHeight" Value="18"/>
+      <Setter Property="UseLayoutRounding" Value="True"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="TextBox">
+            <Border Name="Border" BorderThickness="{TemplateBinding BorderThickness}"
+                    Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}">
+               <ScrollViewer Name="PART_ScrollViewer"
+                             HorizontalScrollBarVisibility="{TemplateBinding (ScrollViewer.HorizontalScrollBarVisibility)}"
+                             VerticalScrollBarVisibility="{TemplateBinding (ScrollViewer.VerticalScrollBarVisibility)}">
+                  <Panel>
+                     <TextBlock Name="PART_Watermark" Text="{TemplateBinding Watermark}" Opacity=".5"
+                                IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
+                     <TextPresenter Name="PART_TextPresenter"
+                                    Text="{TemplateBinding Text, Mode=TwoWay}"
+                                    CaretIndex="{TemplateBinding CaretIndex}"
+                                    SelectionStart="{TemplateBinding SelectionStart}"
+                                    SelectionEnd="{TemplateBinding SelectionEnd}"
+                                    SelectionBrush="{TemplateBinding SelectionBrush}"
+                                    SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                                    CaretBrush="{TemplateBinding CaretBrush}"
+                                    TextAlignment="{TemplateBinding TextAlignment}"
+                                    TextWrapping="{TemplateBinding TextWrapping}"
+                                    PasswordChar="{TemplateBinding PasswordChar}"
+                                    RevealPassword="{TemplateBinding RevealPassword}"/>
+                  </Panel>
+               </ScrollViewer>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:focus /template/ Border#Border">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="Opacity" Value=".5"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- ListBox Style -->
+   <ControlTheme x:Key="{x:Type ListBox}" TargetType="ListBox">
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ListBox">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+               <ScrollViewer HorizontalScrollBarVisibility="{TemplateBinding (ScrollViewer.HorizontalScrollBarVisibility)}"
+                             VerticalScrollBarVisibility="{TemplateBinding (ScrollViewer.VerticalScrollBarVisibility)}">
+                  <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+               </ScrollViewer>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+   </ControlTheme>
+
+   <ControlTheme x:Key="{x:Type ListBoxItem}" TargetType="ListBoxItem">
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ListBoxItem">
+            <Border Name="Border" Padding="5,3" BorderThickness="1" Background="Transparent">
+               <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Border">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- TabControl Styles -->
+   <ControlTheme x:Key="{x:Type TabControl}" TargetType="TabControl">
+      <Setter Property="Padding" Value="2"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Background" Value="{DynamicResource Background}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Background}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="TabControl">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+               <DockPanel>
+                  <ItemsPresenter Name="PART_ItemsPresenter" DockPanel.Dock="Top" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                  <ContentPresenter Name="PART_SelectedContentHost"
+                                    Content="{TemplateBinding SelectedContent}"
+                                    ContentTemplate="{TemplateBinding SelectedContentTemplate}"/>
+               </DockPanel>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+   </ControlTheme>
+
+   <ControlTheme x:Key="{x:Type TabItem}" TargetType="TabItem">
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="TabItem">
+            <!-- OuterBorder gives the 1-pixel spacing between tabs; Border shows selection;
+                 InnerBorder shows hover-over before selection. -->
+            <Border Name="OuterBorder" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource Background}">
+               <Border Name="Border" BorderThickness="1,1,1,0" BorderBrush="{DynamicResource Backlight}" Background="{DynamicResource Backlight}">
+                  <Border Name="InnerBorder" BorderThickness="1,1,1,0" Padding="5,3" BorderBrush="{DynamicResource Backlight}">
+                     <ContentPresenter Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"/>
+                  </Border>
+               </Border>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:selected /template/ Border#Border">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+         <Setter Property="ZIndex" Value="10"/>
+      </Style>
+      <Style Selector="^:selected /template/ Border#InnerBorder">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:selected /template/ Border#OuterBorder">
+         <Setter Property="BorderBrush" Value="{DynamicResource Background}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#InnerBorder">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+   </ControlTheme>
+
+
+   <!-- Angle Button Style -->
+   <ControlTheme x:Key="{x:Type hsc:AngleButton}" TargetType="hsc:AngleButton">
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Padding" Value="3"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="hsc:AngleButton">
+            <DockPanel Name="Container" Margin="{TemplateBinding Margin}">
+               <Path Name="LeftEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Left"
+                     Width="6" StrokeThickness="1" Margin="0,0,-1,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="1,0">
+                              <LineSegment Point="{Binding LeftTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Path Name="RightEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Right"
+                     Width="6" StrokeThickness="1" Margin="-1,0,0,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="-1,0">
+                              <LineSegment Point="{Binding RightTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="-1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Border HorizontalAlignment="Stretch" Name="ButtonBorder" BorderThickness="0,1" BorderBrush="{TemplateBinding BorderBrush}" Background="{TemplateBinding Background}" UseLayoutRounding="True">
+                  <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Margin="{TemplateBinding Padding}"/>
+               </Border>
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^[Direction=None] /template/ Path#LeftEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=None] /template/ Path#RightEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=Left]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^[Direction=Right]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=Out]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=In]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#ButtonBorder">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#LeftEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#RightEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="Opacity" Value=".5"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- Angle Border Style -->
+   <ControlTheme x:Key="{x:Type hsc:AngleBorder}" TargetType="hsc:AngleBorder">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="hsc:AngleBorder">
+            <DockPanel Name="Container">
+               <Path Name="LeftEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Left"
+                     Width="6" Height="18" StrokeThickness="1" Margin="0,0,-1,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="1,0">
+                              <LineSegment Point="{Binding LeftTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Path Name="RightEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Right"
+                     Width="6" Height="18" StrokeThickness="1" Margin="-1,0,0,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="-1,0">
+                              <LineSegment Point="{Binding RightTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="-1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Border Height="18" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,1">
+                  <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+               </Border>
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^[Direction=None] /template/ Path#LeftEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=None] /template/ Path#RightEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=Left]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^[Direction=Right]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=Out]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=In]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="Opacity" Value=".5"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- Angle TextBox Style -->
+   <ControlTheme x:Key="{x:Type hsc:AngleTextBox}" TargetType="hsc:AngleTextBox">
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource TopToBottomBrush}"/>
+      <Setter Property="MinHeight" Value="18"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="hsc:AngleTextBox">
+            <DockPanel Name="Container">
+               <Path Name="LeftEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Left"
+                     Width="6" Height="{TemplateBinding MinHeight}" StrokeThickness="1" Margin="0,0,-1,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="1,0">
+                              <LineSegment Point="{Binding LeftTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Path Name="RightEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Right"
+                     Width="6" Height="{TemplateBinding MinHeight}" StrokeThickness="1" Margin="-1,0,0,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="-1,0">
+                              <LineSegment Point="{Binding RightTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="-1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <ContentPresenter Content="{TemplateBinding Content}" Height="{TemplateBinding MinHeight}" />
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^[Direction=None] /template/ Path#LeftEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=None] /template/ Path#RightEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=Left]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^[Direction=Right]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=Out]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=In]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^:focus-within /template/ Path#LeftEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:focus-within /template/ Path#RightEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#LeftEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#RightEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Background" Value="{DynamicResource Background}"/>
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="Opacity" Value=".5"/>
+      </Style>
+   </ControlTheme>
+
+
+   <!-- Expander Style -->
+   <ControlTheme x:Key="{x:Type Expander}" TargetType="Expander">
+      <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="Expander">
+            <DockPanel Background="Transparent">
+               <ToggleButton Name="HeaderSite" DockPanel.Dock="Left" BorderThickness="0" Background="Transparent" IsTabStop="False"
+                     IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                  <StackPanel Orientation="Horizontal">
+                     <Grid Width="16" Height="16">
+                        <Ellipse Name="circle" Stroke="{TemplateBinding BorderBrush}" StrokeThickness="1" Fill="{TemplateBinding Background}"/>
+                        <Path Name="arrow" RenderTransformOrigin="50%,50%" Data="{hsv:Icon RightArrow}" Fill="{TemplateBinding Foreground}" Stretch="Fill" Margin="3"/>
+                     </Grid>
+                     <ContentPresenter Name="HeaderContent" Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" Margin="3,0"/>
+                  </StackPanel>
+               </ToggleButton>
+               <ContentPresenter Name="ExpanderSite" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                 IsVisible="{TemplateBinding IsExpanded}"/>
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:expanded /template/ Path#arrow">
+         <Setter Property="RenderTransform" Value="matrix(-1,0,0,-1,0,0)"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Ellipse#circle">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:not(:pointerover) /template/ Path#arrow">
+         <Setter Property="Fill" Value="Transparent"/>
+      </Style>
+      <!-- WPF also keyed off Tag="Magic" and ExpandDirection=Down; the Magic highlight: -->
+      <Style Selector="^[Tag=Magic] /template/ Ellipse#circle">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^[Tag=Magic] /template/ Path#arrow">
+         <Setter Property="Fill" Value="{DynamicResource Primary}"/>
+      </Style>
+      <Style Selector="^[ExpandDirection=Down] /template/ ToggleButton#HeaderSite">
+         <Setter Property="DockPanel.Dock" Value="Top"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- Menu style -->
+   <ControlTheme x:Key="{x:Type Menu}" TargetType="Menu">
+      <Setter Property="Background" Value="{DynamicResource Background}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="Menu">
+            <Border Background="{TemplateBinding Background}">
+               <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Setter Property="ItemsPanel">
+         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+      </Setter>
+   </ControlTheme>
+
+   <!--
+      WPF selected between three MenuItem templates with Style triggers on the Role property
+      (TopLevelHeader / SubmenuHeader / SubmenuItem). Avalonia's MenuItem has no Role, so one
+      template covers all three and the submenu chrome shows only when there are child items.
+   -->
+   <ControlTheme x:Key="{x:Type MenuItem}" TargetType="MenuItem">
+      <Setter Property="Background" Value="{DynamicResource Background}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="MenuItem">
+            <Grid Name="ItemBorder" Background="{TemplateBinding Background}" ColumnDefinitions="30,*,Auto,12">
+               <ContentPresenter Grid.Column="0" Margin="5,5,0,5" Content="{TemplateBinding Icon}" />
+               <Border Grid.Column="0" Name="CheckBorder" Width="13" Height="13"
+                     Background="{TemplateBinding Background}" BorderThickness="1" HorizontalAlignment="Center"
+                     VerticalAlignment="Center" BorderBrush="{DynamicResource Secondary}"
+                     IsVisible="{TemplateBinding ToggleType, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <Path Width="7" Height="7" StrokeThickness="2"
+                        Name="CheckMark" Stroke="{DynamicResource Accent}" Data="M 0 0 L 7 7 M 0 7 L 7 0" />
+               </Border>
+               <ContentPresenter Grid.Column="1" Name="MainContent" Margin="10,5" VerticalAlignment="Center"
+                                 Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"/>
+               <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="0,0,10,0"
+                          Text="{TemplateBinding InputGesture, Converter={x:Static hsv:GestureTextConverter.Instance}}"
+                          Foreground="{DynamicResource Secondary}" />
+               <Path Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Center" Name="SubmenuArrow"
+                     Fill="{DynamicResource Secondary}" Data="M0,0 L0,2 1,1 Z" Stretch="Uniform" Width="10" Height="10"
+                     IsVisible="{Binding HasSubMenu, RelativeSource={RelativeSource TemplatedParent}}"/>
+               <Popup Name="PART_Popup" Placement="Right" HorizontalOffset="-4"
+                      IsOpen="{TemplateBinding IsSubMenuOpen, Mode=TwoWay}"
+                      IsLightDismissEnabled="False">
+                  <Border Name="SubmenuBorder" Background="{DynamicResource Background}"
+                          BorderBrush="{DynamicResource Accent}" BorderThickness="1">
+                     <ScrollViewer MaxHeight="400" VerticalScrollBarVisibility="Auto">
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                     </ScrollViewer>
+                  </Border>
+               </Popup>
+            </Grid>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Grid#ItemBorder">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="^:disabled /template/ ContentPresenter#MainContent">
+         <Setter Property="TextElement.Foreground" Value="{DynamicResource Secondary}"/>
+         <Setter Property="TextElement.FontStyle" Value="Italic"/>
+      </Style>
+      <Style Selector="^:not(:checked) /template/ Path#CheckMark">
+         <Setter Property="IsVisible" Value="False"/>
+      </Style>
+   </ControlTheme>
+
+   <!--
+      AngleMenuItem. WPF applied this only when Role == TopLevelHeader, which is what every use
+      site is: an AngleMenuItem declared directly inside a <Menu>. Avalonia has no Role, and a
+      ControlTheme is looked up by the control's own type, so a derived MenuItem gets no theme at
+      all unless one is declared - which is why these rendered as bare boxes before.
+   -->
+   <ControlTheme x:Key="{x:Type hsc:AngleMenuItem}" TargetType="hsc:AngleMenuItem">
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="MinHeight" Value="18"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="hsc:AngleMenuItem">
+            <DockPanel>
+               <Path Name="LeftEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Left"
+                     Width="6" StrokeThickness="1" Margin="0,0,-1,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="1,0">
+                              <LineSegment Point="{Binding LeftTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Path Name="RightEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" DockPanel.Dock="Right"
+                     Width="6" StrokeThickness="1" Margin="-1,0,0,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="-1,0">
+                              <LineSegment Point="{Binding RightTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="-1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Border Name="TopBottomBorder" BorderThickness="0,1" BorderBrush="{TemplateBinding BorderBrush}" UseLayoutRounding="True"
+                       Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
+                  <Grid Name="ItemBorder" Background="{TemplateBinding Background}">
+                     <!-- Avalonia's MenuItem has no Horizontal/VerticalContentAlignment; WPF centred
+                          the header through them, so the presenter is centred directly. -->
+                     <ContentPresenter Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                     <Popup Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsSubMenuOpen, Mode=TwoWay}" IsLightDismissEnabled="False">
+                        <Border Name="SubmenuBorder" BorderThickness="1" Background="{DynamicResource Background}" BorderBrush="{DynamicResource Accent}">
+                           <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                        </Border>
+                     </Popup>
+                  </Grid>
+               </Border>
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Setter Property="ItemsPanel">
+         <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
+      </Setter>
+      <Style Selector="^[Direction=None] /template/ Path#LeftEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=None] /template/ Path#RightEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=Left]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^[Direction=Right]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=Out]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=In]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Grid#ItemBorder">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#LeftEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#RightEdge">
+         <Setter Property="Stroke" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#TopBottomBorder">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+   </ControlTheme>
+
+   <ControlTheme x:Key="{x:Type ContextMenu}" TargetType="ContextMenu">
+      <Setter Property="Background" Value="{DynamicResource Background}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ContextMenu">
+            <Border Background="{DynamicResource Background}" BorderBrush="{DynamicResource Accent}" BorderThickness="1">
+               <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+   </ControlTheme>
+
+   <!-- WPF keyed this off MenuItem.SeparatorStyleKey; Avalonia uses the Separator type directly. -->
+   <ControlTheme x:Key="{x:Type Separator}" TargetType="Separator">
+      <Setter Property="Background" Value="{DynamicResource Secondary}"/>
+      <Setter Property="Margin" Value="0,2"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Height" Value="1"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="Separator">
+            <Border Background="{TemplateBinding Background}" Height="1"/>
+         </ControlTemplate>
+      </Setter>
+   </ControlTheme>
+
+   <!-- Combobox Style -->
+   <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+      <Setter Property="UseLayoutRounding" Value="True"/>
+      <Setter Property="MinHeight" Value="20"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ComboBox">
+            <Grid>
+               <Border Name="Border" Background="{DynamicResource Backlight}" BorderBrush="{DynamicResource Accent}" BorderThickness="1">
+                  <Path Name="Arrow" Width="20" Fill="{DynamicResource Secondary}"
+                        VerticalAlignment="Center" HorizontalAlignment="Right"
+                        Data="M0,0 L0,2 L4,6 L8,2 L8,0 L4,4 z" />
+               </Border>
+               <ContentPresenter Name="ContentSite" IsHitTestVisible="False"
+                        Content="{TemplateBinding SelectionBoxItem}"
+                        ContentTemplate="{TemplateBinding ItemTemplate}"
+                        Margin="3,3,23,3" VerticalAlignment="Center" HorizontalAlignment="Left" />
+               <Popup Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                      PlacementTarget="{TemplateBinding}" Placement="Bottom" IsLightDismissEnabled="True">
+                  <Grid Name="DropDown" MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                     <Border Name="DropDownBorder" Background="{DynamicResource Background}" BorderThickness="1" BorderBrush="{DynamicResource Secondary}"/>
+                     <ScrollViewer Margin="4,6,4,6">
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                     </ScrollViewer>
+                  </Grid>
+               </Popup>
+            </Grid>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:empty /template/ Border#DropDownBorder">
+         <Setter Property="MinHeight" Value="95"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+   </ControlTheme>
+
+   <!--
+      AngleComboBox. WPF declared the whole template inside AngleComboBox.xaml; here it joins the
+      other angled controls in this dictionary. Avalonia's ComboBox has no editable mode, so the
+      WPF "IsEditable" trigger and PART_EditableTextBox become a TextBox that the control swaps in
+      whenever its DataContext is a filterable FilteringComboOptions (see AngleComboBox.cs).
+   -->
+   <ControlTheme x:Key="{x:Type hsc:AngleComboBox}" TargetType="hsc:AngleComboBox">
+      <Setter Property="UseLayoutRounding" Value="True"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+      <Setter Property="MinHeight" Value="18"/>
+      <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="hsc:AngleComboBox">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+               <Path Name="LeftEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" Grid.Column="0"
+                     Width="6" StrokeThickness="1" Margin="0,0,-1,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="1,0">
+                              <LineSegment Point="{Binding LeftTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding LeftBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Path Name="RightEdge" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" Grid.Column="2"
+                     Width="6" StrokeThickness="1" Margin="-1,0,0,0" Stretch="Fill" UseLayoutRounding="True">
+                  <Path.Data>
+                     <PathGeometry>
+                        <PathGeometry.Figures>
+                           <PathFigure StartPoint="-1,0">
+                              <LineSegment Point="{Binding RightTop, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightMiddle, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="{Binding RightBottom, RelativeSource={RelativeSource TemplatedParent}}" />
+                              <LineSegment Point="-1,10"/>
+                           </PathFigure>
+                        </PathGeometry.Figures>
+                     </PathGeometry>
+                  </Path.Data>
+               </Path>
+               <Border Name="ToggleBorder" Grid.Column="1" Background="{TemplateBinding Background}"
+                       BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,1">
+                  <Path Name="Arrow" Width="8" Fill="{DynamicResource Secondary}"
+                        VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,2,0"
+                        Data="M0,0 L0,2 L4,6 L8,2 L8,0 L4,4 z" />
+               </Border>
+               <ContentPresenter Name="ContentSite" Grid.Column="1" IsHitTestVisible="False"
+                        Content="{TemplateBinding SelectionBoxItem}"
+                        ContentTemplate="{TemplateBinding ItemTemplate}"
+                        Margin="0,0,10,0" VerticalAlignment="Center" HorizontalAlignment="Left" />
+               <TextBox Name="PART_EditableTextBox" Grid.Column="1" Theme="{x:Null}"
+                        BorderThickness="0" Padding="0" MinHeight="0"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,10,0"
+                        Background="{DynamicResource Backlight}" Foreground="{DynamicResource Primary}"
+                        IsVisible="False" />
+               <Popup Name="PART_Popup" Grid.Column="1" Placement="Bottom" IsLightDismissEnabled="True"
+                      IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}" PlacementTarget="{TemplateBinding}">
+                  <Grid Name="DropDown" MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                     <Border Name="DropDownBorder" Background="{DynamicResource Background}" BorderThickness="1"
+                             BorderBrush="{DynamicResource Secondary}" Margin="0,2,0,0"/>
+                     <ScrollViewer Margin="4,6">
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                     </ScrollViewer>
+                  </Grid>
+               </Popup>
+            </Grid>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:empty /template/ Border#DropDownBorder">
+         <Setter Property="MinHeight" Value="95"/>
+      </Style>
+      <Style Selector="^[Direction=None] /template/ Path#LeftEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=None] /template/ Path#RightEdge">
+         <Setter Property="Width" Value="2"/>
+      </Style>
+      <Style Selector="^[Direction=Left]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <Style Selector="^[Direction=Right]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=Out]">
+         <Setter Property="LeftMiddle" Value="-5,5"/>
+         <Setter Property="RightMiddle" Value="5,5"/>
+      </Style>
+      <Style Selector="^[Direction=In]">
+         <Setter Property="LeftTop" Value="-5,0"/>
+         <Setter Property="LeftBottom" Value="-5,10"/>
+         <Setter Property="RightTop" Value="5,0"/>
+         <Setter Property="RightBottom" Value="5,10"/>
+      </Style>
+      <!-- WPF swapped ContentSite for the editable text box with an IsEditable trigger. -->
+      <Style Selector="^.editable /template/ TextBox#PART_EditableTextBox">
+         <Setter Property="IsVisible" Value="True"/>
+      </Style>
+      <Style Selector="^.editable /template/ ContentPresenter#ContentSite">
+         <Setter Property="IsVisible" Value="False"/>
+      </Style>
+      <Style Selector="^:pointerover">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:focus-within">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+   </ControlTheme>
+
+   <ControlTheme x:Key="{x:Type ComboBoxItem}" TargetType="ComboBoxItem">
+      <Setter Property="UseLayoutRounding" Value="True"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="ComboBoxItem">
+            <Border Name="Border" Padding="2" Background="Transparent">
+               <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+            </Border>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Border">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="^:selected /template/ Border#Border">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- Checkbox Style -->
+   <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+      <Setter Property="UseLayoutRounding" Value="True"/>
+      <Setter Property="Foreground" Value="{DynamicResource Primary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="CheckBox">
+            <!-- WPF used a BulletDecorator; Avalonia has none, so a DockPanel holds bullet + content. -->
+            <DockPanel Background="Transparent" Height="15">
+               <Border Name="Border" Width="13" Height="13" Margin="1" DockPanel.Dock="Left"
+                     Background="{DynamicResource Background}" BorderThickness="1"
+                     VerticalAlignment="Center" BorderBrush="{DynamicResource Secondary}">
+                  <Path Width="7" Height="7" Name="CheckMark" Stroke="{DynamicResource Accent}"
+                        StrokeThickness="2" Data="M 0 0 L 7 7 M 0 7 L 7 0" />
+               </Border>
+               <Viewbox Margin="3,0,0,0" HorizontalAlignment="Left" Stretch="Uniform">
+                  <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+               </Viewbox>
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:unchecked /template/ Path#CheckMark">
+         <Setter Property="IsVisible" Value="False"/>
+      </Style>
+      <Style Selector="^:indeterminate /template/ Path#CheckMark">
+         <Setter Property="Data" Value="M 0 7 L 7 0"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#Border">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="^:pressed /template/ Border#Border">
+         <Setter Property="Background" Value="{DynamicResource Backlight}"/>
+         <Setter Property="BorderBrush" Value="{DynamicResource Primary}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+      <Style Selector="^:disabled /template/ Border#Border">
+         <Setter Property="Opacity" Value=".8"/>
+      </Style>
+   </ControlTheme>
+
+   <!-- RadioButton Style -->
+   <ControlTheme x:Key="{x:Type RadioButton}" TargetType="RadioButton">
+      <Setter Property="UseLayoutRounding" Value="True"/>
+      <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="RadioButton">
+            <DockPanel Background="Transparent" Height="15">
+               <Grid Width="13" Height="13" Margin="1" VerticalAlignment="Center" DockPanel.Dock="Left" UseLayoutRounding="True">
+                  <Path Name="Border" Fill="{DynamicResource Background}" Stroke="{DynamicResource Secondary}" StrokeThickness="1"
+                        Data="M3,1.5 l 6,0 3,5 -3,5 -6,0 -3,-5 Z"/>
+                  <Path Name="CheckMark" Fill="{TemplateBinding Foreground}"
+                        Data="M4,3.5 l 4,0 2,3 -2,3 -4,0 -2,-3 Z"/>
+               </Grid>
+               <Viewbox Margin="3,0,0,0" HorizontalAlignment="Left" Stretch="Uniform">
+                  <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+               </Viewbox>
+            </DockPanel>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:unchecked /template/ Path#CheckMark">
+         <Setter Property="IsVisible" Value="False"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Path#Border">
+         <Setter Property="Fill" Value="{DynamicResource Backlight}"/>
+      </Style>
+      <Style Selector="^:pressed /template/ Path#Border">
+         <Setter Property="Fill" Value="{DynamicResource Backlight}"/>
+         <Setter Property="Stroke" Value="{DynamicResource Primary}"/>
+      </Style>
+      <Style Selector="^:disabled">
+         <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+      </Style>
+      <Style Selector="^:disabled /template/ Path#Border">
+         <Setter Property="Opacity" Value=".8"/>
+      </Style>
+   </ControlTheme>
+
+   <!--
+      Slider and ScrollBar: WPF replaced the whole default template purely to recolour it (every
+      one of its MultiDataTriggers set the same brush it already had, so they were no-ops).
+      Avalonia's stock templates have the same parts, so these restyle them instead of replacing
+      them, which keeps the look without re-implementing Track/Thumb behaviour.
+   -->
+   <ControlTheme x:Key="{x:Type Thumb}" TargetType="Thumb">
+      <Setter Property="Background" Value="{DynamicResource Secondary}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Secondary}"/>
+      <Setter Property="Template">
+         <ControlTemplate TargetType="Thumb">
+            <Border Name="grip" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"/>
+         </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#grip">
+         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+   </ControlTheme>
+
+   <!--
+      The Data Templates that lived here in WPF moved to Resources/GeneralDataTemplates.axaml:
+      Avalonia resolves implicit (DataType-keyed) templates through Application.DataTemplates,
+      and a ResourceDictionary cannot hold them.
+   -->
+
+</ResourceDictionary>
