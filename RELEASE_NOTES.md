@@ -19,7 +19,7 @@ xattr -dr com.apple.quarantine /Applications/HexManiacAdvance.app
 ```
 
 The app is ad-hoc signed but **not notarized**, so macOS refuses to open it until that flag is gone,
-and on recent versions right-click Open no longer clears it. Without this you get "damaged and
+and on recent versions right-click > Open no longer clears it. Without this you get "damaged and
 can't be opened", which is macOS being unhelpful rather than the file being damaged.
 
 Requires macOS 11 or later. Nothing else to install - the build is self-contained and does not need
@@ -32,7 +32,7 @@ Open a ROM by double-clicking a `.gba`, dropping one on the app, or File Open.
 Everything upstream does - Pokemon, trainers, moves, items, maps, scripts, images, the pokedex, the
 goto tool, the utilities menu - plus:
 
-- **A built-in emulator.** *File Test in Emulator* runs the ROM **as it stands in the editor**,
+- **A built-in emulator.** *File > Test in Emulator* runs the ROM **as it stands in the editor**,
   unsaved edits included. Nothing is written to your `.gba` to test a change.
 - **Named save states**, so you can play to the spot you care about once and jump back to it after
   every edit instead of walking there again.
