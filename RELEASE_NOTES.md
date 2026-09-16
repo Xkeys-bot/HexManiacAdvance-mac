@@ -78,6 +78,19 @@ process.
   behaviour *should* hold, but that is an assumption, not a measurement.
 - Only the five supported games have been exercised at all, and only FireRed seriously.
 
+## Checksums (SHA-256)
+
+You are about to strip the quarantine flag off an unsigned app. Check what you downloaded first:
+
+```
+6cf13d4ff3352b45f36aacd9aa96c617ed5bcb55c03348d1c2fedbc219e85aea  HexManiacAdvance-0.5.6.1-osx-arm64.zip
+14dbc41e5813af6a3ee792388c04f65813ef4f6a663ae4e810ecd5500fc2332d  HexManiacAdvance-0.5.6.1-osx-x64.zip
+```
+
+```
+shasum -a 256 HexManiacAdvance-0.5.6.1-osx-arm64.zip
+```
+
 ## Reporting things
 
 Please include your macOS version, which Mac (Apple Silicon or Intel), which core you were using,
