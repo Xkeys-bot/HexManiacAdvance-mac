@@ -4,6 +4,8 @@ HexManiacAdvance is an all-purpose editor designed for editing Pokemon GBA games
 
 Other than standard hex editor features like view/edit, copy/paste, and diff, it also provides improved navigation, display, and editing for working with data within the files. It also has custom editors for complex data like code, images, maps, and the pokedex.
 
+Published to Github Using Claude.
+
 ![Screenshot](https://i.imgur.com/uUYoaqk.png)
 
 > **This fork adds a macOS build.** Upstream HexManiacAdvance is a WPF application and runs on
